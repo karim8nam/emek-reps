@@ -85,6 +85,8 @@
   const showErr = (box, msg) => { box.textContent = msg; box.classList.remove('hidden'); box.scrollIntoView({ block: 'nearest' }); };
 
   // ---------- الدخول
+  // الخروج من الموبايل ده بس — المكتبة لوحدها بتخرّج كل أجهزة الحساب (scope=global)، والمندوب ممكن يبقى داخل من موبايلين
+  const signOutHere = () => sb.auth.signOut({ scope: 'local' }).catch(() => {});
   function showLogin(msg) {
     $('#appScreen').classList.add('hidden'); $('#loginScreen').classList.remove('hidden');
     if (msg) showErr($('#loginError'), msg);
@@ -98,7 +100,7 @@
       if (error) throw new Error(isNetwork(error) ? 'مفيش نت — اتأكد من النت وحاول تاني' : /Invalid login|invalid_grant|credentials/i.test(error.message) ? 'اسم الدخول أو الباسورد غلط' : /Too many|محاولات/i.test(error.message) ? 'محاولات كتير ورا بعض — استنى دقيقة وحاول تاني' : error.message);
       user = d.user;
       try { await rpc('portal_me'); }
-      catch (ex) { await sb.auth.signOut().catch(() => {}); user = null; throw new Error(/مش حساب مندوب/.test(ex.message) ? 'الحساب ده مش حساب مندوب — صفحة المناديب للمناديب بس' : ex.message); }
+      catch (ex) { await signOutHere(); user = null; throw new Error(/مش حساب مندوب/.test(ex.message) ? 'الحساب ده مش حساب مندوب — صفحة المناديب للمناديب بس' : ex.message); }
       $('#loginPass').value = '';
       await startApp();
     } catch (ex) { showErr(err, ex.message); }
@@ -108,7 +110,7 @@
     const waiting = outbox().filter(x => x.state !== 'failed').length;
     if (!await confirmSheet('خروج', waiting ? `<div class="note warn">فيه ${waiting} حاجة لسه متبعتتش — هتفضل على الموبايل وهتتبعت لما تدخل تاني.</div>` : 'تخرج من الصفحة؟', 'خروج', 'danger')) return;
     clearInterval(refreshTimer);
-    await sb.auth.signOut().catch(() => {});
+    await signOutHere();
     user = null; data = null;
     showLogin();
   });
@@ -132,7 +134,7 @@
       setOnline(true);
     } catch (e) {
       if (e.network) setOnline(false);
-      else if (e.auth) { await sb.auth.signOut().catch(() => {}); return showLogin(/متوقف/.test(e.message) ? e.message : 'انتهت الجلسة — ادخل تاني'); }
+      else if (e.auth) { await signOutHere(); return showLogin(/متوقف/.test(e.message) ? e.message : 'انتهت الجلسة — ادخل تاني'); }
       else if (!quiet) toast(e.message, 'bad');
     }
     // (الفورم اللي بيتكتب أو الشيت المفتوح ميتلمسوش)
