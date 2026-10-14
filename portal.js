@@ -197,7 +197,9 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && user) { sendOutbox(); loadState(true); } });
 
   // ---------- الطلبات: اللي على الموبايل + في الطريق + في المصنع + طلبات عملاؤه التانية
-  const lineText = l => `${l.item || productName(l.product_id)} — ${l.unit === 'ton' ? tons(l.kg ?? l.quantity_kg) : `${qty(l.count)} ${l.type || l.package_type} × ${qty(l.weight)} كجم`}${l.code ? ' — ' + l.code : ''}`;
+  // حالة التصنيع لكل صنف (لو اتعمله أمر تصنيع)
+  const batchText = l => !l.batch ? '' : ` — 🏭 ${l.batch_status === 'done' ? 'اتصنع' : l.batch_status === 'cancelled' ? 'اتلغى أمر التصنيع' : 'بيتصنع'} (باتش ${l.batch})`;
+  const lineText = l => `${l.item || productName(l.product_id)} — ${l.unit === 'ton' ? tons(l.kg ?? l.quantity_kg) : `${qty(l.count)} ${l.type || l.package_type} × ${qty(l.weight)} كجم`}${l.code ? ' — ' + l.code : ''}${batchText(l)}`;
   function stageOf(g) {
     const live = g.filter(d => d.type === 'invoice' && !['cancelled', 'rejected'].includes(d.status)).pop() || g[g.length - 1];
     const ex = g.find(d => d.exit_no);
@@ -225,21 +227,184 @@
     for (const o of s.orders) {
       let g = null;
       if (o.doc_id) { const d = s.docs.find(x => Number(x.id) === Number(o.doc_id)); if (d) { g = groups.get(Number(d.root)); used.add(Number(d.root)); } }
-      const stage = o.status === 'rejected' ? ['اترفض: ' + (o.reason || ''), 'bad'] : o.status === 'pending' ? ['وصل المصنع — بيتراجع', 'warn'] : g ? stageOf(g) : ['اتسجل', ''];
+      const stage = o.status === 'rejected' ? ['اترفض: ' + (o.reason || ''), 'bad'] : o.status === 'pending' ? (o.lines.some(l => l.batch) ? ['وصل المصنع — بيتصنع', 'warn'] : ['وصل المصنع — بيتراجع', 'warn']) : g ? stageOf(g) : ['اتسجل', ''];
       const liveDoc = g ? (g.filter(d => d.type === 'invoice').pop() || g[g.length - 1]) : null;
-      cards.push({ at: o.created_at, customer: o.customer, stage, lines: liveDoc ? liveDoc.lines : o.lines, number: liveDoc ? `${liveDoc.type === 'quote' ? 'عرض' : 'فاتورة'} ${liveDoc.number}` : 'طلب ' + o.id, mine: true });
+      cards.push({ at: o.created_at, customer: o.customer, stage, lines: liveDoc ? liveDoc.lines : o.lines, number: liveDoc ? `${liveDoc.type === 'quote' ? 'عرض' : 'فاتورة'} ${liveDoc.number}` : 'طلب ' + o.id, mine: true, invoice: exitedInvoice(g) });
     }
     for (const [r, g] of groups) {
       if (used.has(r)) continue;
       const liveDoc = g.filter(d => d.type === 'invoice').pop() || g[g.length - 1];
-      cards.push({ at: g[0].created_at, customer: liveDoc.customer, stage: stageOf(g), lines: liveDoc.lines, number: `${liveDoc.type === 'quote' ? 'عرض' : 'فاتورة'} ${liveDoc.number}` });
+      cards.push({ at: g[0].created_at, customer: liveDoc.customer, stage: stageOf(g), lines: liveDoc.lines, number: `${liveDoc.type === 'quote' ? 'عرض' : 'فاتورة'} ${liveDoc.number}`, invoice: exitedInvoice(g) });
     }
     return cards.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   }
-  const orderCardHtml = c => `<div class="item"><div class="item-head"><b>${esc(c.customer || '—')}</b><span class="chip ${c.stage[1]}">${esc(c.stage[0])}</span></div>
-    <div class="item-sub">${c.number ? esc(c.number) + ' — ' : ''}${esc(fmtDateTime(c.at))}${c.mine ? '' : c.out ? '' : ''}</div>
+  // الفاتورة اللي خرجت (عشان «⚠️ مشكلة في الطلب» لو وصل ناقص أو لونه غلط)
+  const exitedInvoice = g => (g || []).filter(d => d.type === 'invoice' && d.status === 'approved' && d.exit_no).pop() || null;
+  const complaintsOn = docId => complaintCards().filter(k => Number(k.doc_id) === Number(docId));
+  const orderCardHtml = c => {
+    const ks = c.invoice ? complaintsOn(c.invoice.id) : [];
+    return `<div class="item"><div class="item-head"><b>${esc(c.customer || '—')}</b><span class="chip ${c.stage[1]}">${esc(c.stage[0])}</span></div>
+    <div class="item-sub">${c.number ? esc(c.number) + ' — ' : ''}${esc(fmtDateTime(c.at))}</div>
     <ul class="lines">${(c.lines || []).map(l => `<li>${esc(lineText(l))}</li>`).join('')}</ul>
-    ${c.out && c.out.state === 'failed' ? `<div class="actions"><button type="button" class="danger" data-drop="${esc(c.out.uid)}">امسحه</button></div>` : ''}</div>`;
+    ${ks.map(k => `<div class="item-sub">⚠️ ${esc(COMPLAINT_KIND[k.kind] || '')}: <span class="chip ${k.stage[1]}">${esc(k.stage[0])}</span></div>`).join('')}
+    ${c.out && c.out.state === 'failed' ? `<div class="actions"><button type="button" class="danger" data-drop="${esc(c.out.uid)}">امسحه</button></div>` : ''}
+    ${c.invoice ? `<div class="actions"><button type="button" class="secondary" data-complain="${c.invoice.id}">⚠️ مشكلة في الطلب (ناقص / لون غلط)</button></div>` : ''}</div>`;
+  };
+
+  // ---------- الشكاوى وطلبات الاستبدال
+  const COMPLAINT_KIND = { short: 'وصل ناقص', wrong_color: 'لونه غلط', damaged: 'وصل تالف', other: 'مشكلة تانية' };
+  const COMPLAINT_STATE = { new: ['وصلت المصنع', 'warn'], in_progress: ['بيجهّزوا البديل', ''], done: ['خلصت', 'good'], rejected: ['اترفضت', 'bad'] };
+  function complaintCards() {
+    const s = st(); if (!s) return [];
+    const list = s.complaints || [], out = outbox().filter(x => x.kind === 'complaint'), known = new Set(list.map(k => k.uid));
+    const inbox = (data.inbox || []).filter(i => i.kind === 'complaint' && !known.has(i.uid) && !out.some(x => x.uid === i.uid));
+    const docNo = id => (s.docs.find(d => Number(d.id) === Number(id)) || {}).number || '';
+    const docCust = id => (s.docs.find(d => Number(d.id) === Number(id)) || {}).customer || '';
+    const linesOf = (id, ls) => { const d = s.docs.find(x => Number(x.id) === Number(id)); return (ls || []).map(l => ({ item: ((d && d.lines.find(x => Number(x.line_no) === Number(l.line_no))) || {}).item || 'صنف', qty: l.qty })); };
+    return [
+      ...out.map(o => ({ at: o.created_at, doc_id: o.payload.doc_id, number: docNo(o.payload.doc_id), customer: docCust(o.payload.doc_id), kind: o.payload.kind, replacement: o.payload.replacement,
+        stage: o.state === 'failed' ? ['مقبلش: ' + o.error, 'bad'] : ['على الموبايل — لسه متبعتش', 'gray'], lines: linesOf(o.payload.doc_id, o.payload.lines), out: o })),
+      ...inbox.map(i => ({ at: i.created_at, doc_id: i.payload.doc_id, number: docNo(i.payload.doc_id), customer: docCust(i.payload.doc_id), kind: i.payload.kind, replacement: i.payload.replacement,
+        stage: i.error ? ['مقبلش: ' + i.error, 'bad'] : ['اتبعت — مستني المصنع يستلمها', 'gray'], lines: linesOf(i.payload.doc_id, i.payload.lines) })),
+      ...list.map(k => ({ at: k.created_at, doc_id: k.doc_id, number: k.doc_number, customer: k.customer, kind: k.kind, replacement: k.replacement, note: k.status_note,
+        stage: COMPLAINT_STATE[k.status] || [k.status, ''], lines: k.lines.map(l => ({ ...l, unit: null })) })),
+    ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  }
+  const complaintCardHtml = k => `<div class="item"><div class="item-head"><b>⚠️ ${esc(COMPLAINT_KIND[k.kind] || '')} — ${esc(k.customer || '')}</b><span class="chip ${k.stage[1]}">${esc(k.stage[0])}</span></div>
+    <div class="item-sub">فاتورة ${esc(k.number || '')}${k.replacement ? ' — طلب استبدال' : ''} — ${esc(fmtDateTime(k.at))}</div>
+    <ul class="lines">${(k.lines || []).map(l => `<li>${esc(l.item)}${l.code ? ' — ' + esc(l.code) : ''}${l.qty ? ' — ' + esc(l.qty) : ''}${esc(batchText(l))}</li>`).join('')}</ul>
+    ${k.note ? `<div class="item-sub">${esc(k.note)}</div>` : ''}
+    ${k.out && k.out.state === 'failed' ? `<div class="actions"><button type="button" class="danger" data-drop="${esc(k.out.uid)}">امسحه</button></div>` : ''}</div>`;
+  function complaintForm(docId) {
+    const s = st(), d = s.docs.find(x => Number(x.id) === Number(docId));
+    if (!d) return toast('الفاتورة دي مش موجودة — حدّث الصفحة', 'bad');
+    const sh = openSheet('⚠️ مشكلة في الطلب', `<div class="note">${esc(d.customer)} — فاتورة ${esc(d.number)}${d.exit_at ? ' — خرجت ' + esc(fmtDate(d.exit_at)) : ''}. المبيعات هتشوفها على طول، ولو طلبت استبدال بيتعمل أمر تصنيع للبديل.</div>
+      <div class="seg" id="kpKind"><button type="button" data-k="short" class="on">ناقص</button><button type="button" data-k="wrong_color">لون غلط</button><button type="button" data-k="damaged">تالف</button><button type="button" data-k="other">حاجة تانية</button></div>
+      <h3>الأصناف اللي فيها المشكلة</h3>
+      <div class="list">${d.lines.map(l => `<div class="item"><label class="check-line"><input type="checkbox" data-ln="${l.line_no}"> ${esc(lineText(l))}</label>
+        <input data-q="${l.line_no}" maxlength="40" placeholder="الكمية اللي فيها المشكلة (زي «5 شكاير»)" class="hidden"></div>`).join('')}</div>
+      <label class="check-line mt12"><input type="checkbox" id="kpRepl" checked> عايز استبدال (البديل يتصنع ويتبعت)</label>
+      <label class="mt12">اكتب المشكلة<textarea id="kpNote" maxlength="500" placeholder="مثلًا: اللون أغمق من العينة / ناقص 5 شكاير"></textarea></label>
+      <label>صورة (اختياري)<input id="kpPhoto" type="file" accept="image/*"></label>
+      <img id="kpPrev" class="photo-prev hidden" alt="صورة المشكلة">
+      <div class="error hidden" id="kpErr"></div>
+      <button type="button" class="primary big" id="kpSend">📤 ابعت للمصنع</button>`);
+    const b = sh.el;
+    let kind = 'short', image = null;
+    $('#kpKind', b).onclick = e => { const k = e.target.closest('[data-k]'); if (!k) return; kind = k.dataset.k; $$('#kpKind button', b).forEach(x => x.classList.toggle('on', x === k)); };
+    b.addEventListener('change', e => { const c = e.target.closest('[data-ln]'); if (c) $(`[data-q="${c.dataset.ln}"]`, b).classList.toggle('hidden', !c.checked); });
+    $('#kpPhoto', b).onchange = async e => {
+      const f = e.target.files && e.target.files[0]; image = null; $('#kpPrev', b).classList.add('hidden');
+      if (!f) return;
+      try { image = await shrinkImage(f); $('#kpPrev', b).src = image; $('#kpPrev', b).classList.remove('hidden'); }
+      catch (ex) { showErr($('#kpErr', b), ex.message); e.target.value = ''; }
+    };
+    $('#kpSend', b).onclick = async e => {
+      const btn = e.currentTarget, err = $('#kpErr', b); err.classList.add('hidden');
+      const lines = $$('[data-ln]', b).filter(c => c.checked).map(c => ({ line_no: Number(c.dataset.ln), ...($(`[data-q="${c.dataset.ln}"]`, b).value.trim() ? { qty: $(`[data-q="${c.dataset.ln}"]`, b).value.trim() } : {}) }));
+      if (!lines.length) return showErr(err, 'علّم على الأصناف اللي فيها المشكلة');
+      const note = $('#kpNote', b).value.trim();
+      if (kind === 'other' && !note) return showErr(err, 'اكتب المشكلة');
+      const payload = { doc_id: d.id, kind, replacement: $('#kpRepl', b).checked, lines, ...(note ? { note } : {}), ...(image ? { image } : {}) };
+      if (!await confirmSheet('ابعت للمصنع؟', `<div class="item"><b>⚠️ ${esc(COMPLAINT_KIND[kind])}${payload.replacement ? ' — طلب استبدال' : ''}</b><div class="item-sub">${esc(d.customer)} — فاتورة ${esc(d.number)} — ${lines.length} صنف</div></div>`, '📤 ابعت')) return;
+      btn.disabled = true;
+      try {
+        const r = await queue('complaint', payload);
+        if (r.error) return showErr(err, 'المصنع مقبلهاش: ' + r.error);
+        sh.close(); render();
+        toast(r === 'sent' ? '✅ اتبعتت للمصنع' : '📱 اتحفظت على الموبايل — هتتبعت لوحدها أول ما النت يرجع', r === 'sent' ? 'good' : '');
+      } catch (ex) { showErr(err, ex.message); }
+      finally { if (btn.isConnected) btn.disabled = false; }
+    };
+  }
+
+  // ---------- العينات (مجانية)
+  const SAMPLE_STATE = { new: ['وصلت المصنع', 'warn'], preparing: ['بتتجهز', ''], ready: ['✅ جاهزة', 'good'], delivered: ['اتسلّمت', 'gray'], rejected: ['اترفضت', 'bad'] };
+  function sampleCards() {
+    const s = st(); if (!s) return [];
+    const list = s.samples || [], out = outbox().filter(x => x.kind === 'sample'), known = new Set(list.map(x => x.uid));
+    const inbox = (data.inbox || []).filter(i => i.kind === 'sample' && !known.has(i.uid) && !out.some(x => x.uid === i.uid));
+    const who = p => p.customer_id ? (customerById(p.customer_id) || {}).name : p.prospect_name;
+    const ls = p => (p.lines || []).map(l => ({ item: productName(l.product_id), code: l.code, qty: l.qty }));
+    return [
+      ...out.map(o => ({ at: o.created_at, customer: who(o.payload), prospect: !o.payload.customer_id, stage: o.state === 'failed' ? ['مقبلش: ' + o.error, 'bad'] : ['على الموبايل — لسه متبعتش', 'gray'], lines: ls(o.payload), out: o })),
+      ...inbox.map(i => ({ at: i.created_at, customer: who(i.payload), prospect: !i.payload.customer_id, stage: i.error ? ['مقبلش: ' + i.error, 'bad'] : ['اتبعت — مستني المصنع يستلمه', 'gray'], lines: ls(i.payload) })),
+      ...list.map(x => ({ at: x.created_at, customer: x.customer, prospect: x.prospect, stage: SAMPLE_STATE[x.status] || [x.status, ''], lines: x.lines, note: x.status_note })),
+    ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  }
+  const sampleCardHtml = x => `<div class="item"><div class="item-head"><b>🧪 ${esc(x.customer || '—')}${x.prospect ? ' <span class="chip gray">بيجرّب</span>' : ''}</b><span class="chip ${x.stage[1]}">${esc(x.stage[0])}</span></div>
+    <div class="item-sub">${esc(fmtDateTime(x.at))}</div>
+    <ul class="lines">${(x.lines || []).map(l => `<li>${esc(l.item)}${l.code ? ' — ' + esc(l.code) : ''}${l.qty ? ' — ' + esc(l.qty) : ''}</li>`).join('')}</ul>
+    ${x.note ? `<div class="item-sub">${esc(x.note)}</div>` : ''}
+    ${x.out && x.out.state === 'failed' ? `<div class="actions"><button type="button" class="danger" data-drop="${esc(x.out.uid)}">امسحه</button></div>` : ''}</div>`;
+  function renderSamples(v) {
+    const cards = sampleCards();
+    v.innerHTML = `<h2>العينات</h2>
+      <div class="note">العينات مجانية. اطلبها لعميل من عملاءك، أو لعميل لسه بيجرّب (اسمه بيتحفظ باسمك ومش لازم يتسجل غير لما يطلب منتج).</div>
+      <button type="button" class="primary big" id="smNew">➕ طلب عينة</button>
+      <h3>طلبات العينات</h3>
+      <div class="list">${cards.map(sampleCardHtml).join('') || '<div class="empty">لسه مفيش طلبات عينات</div>'}</div>`;
+    $('#smNew', v).onclick = () => sampleForm();
+  }
+  function sampleForm(pre = {}) {
+    const s = st();
+    const sh = openSheet('🧪 طلب عينة', `<label>العميل<select id="sfCustomer"><option value="">— اختار —</option>${s.customers.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+        <option value="new">عميل لسه بيجرّب (مش متسجل)</option></select></label>
+      <div id="sfNew" class="hidden"><div class="row"><label>اسمه<input id="sfName" maxlength="120" list="sfProspects"></label><label>تليفونه<input id="sfPhone" dir="ltr" inputmode="tel" maxlength="15"></label></div></div>
+      <datalist id="sfProspects">${(s.prospects || []).map(p => `<option value="${esc(p.name)}"></option>`).join('')}</datalist>
+      <div id="sfLines"></div>
+      <button type="button" class="secondary big" id="sfAdd">+ عينة تانية</button>
+      <label class="mt12">ملاحظة (اختياري)<textarea id="sfNote" maxlength="500"></textarea></label>
+      <div class="error hidden" id="sfErr"></div>
+      <button type="button" class="primary big" id="sfSend">📤 ابعت طلب العينة</button>`);
+    const b = sh.el, box = $('#sfLines', b);
+    const prodOpts = '<option value="">— اختار الصنف —</option>' + s.products.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+    const addLine = () => {
+      const d = document.createElement('div'); d.className = 'oline';
+      d.innerHTML = `<div class="oline-head"><span data-n></span><button type="button" class="x" data-del aria-label="شيل العينة">×</button></div>
+        <label>الصنف<select data-f="product">${prodOpts}</select></label>
+        <div class="row"><label>الكود / اللون<input data-f="code" maxlength="60"></label><label>الكمية<input data-f="qty" maxlength="40" placeholder="علبة 1 كيلو"></label></div>`;
+      box.appendChild(d);
+      $$('.oline', box).forEach((x, i) => { $('[data-n]', x).textContent = 'العينة ' + (i + 1); });
+    };
+    addLine();
+    box.onclick = e => { if (e.target.closest('[data-del]') && $$('.oline', box).length > 1) { e.target.closest('.oline').remove(); $$('.oline', box).forEach((x, i) => { $('[data-n]', x).textContent = 'العينة ' + (i + 1); }); } };
+    $('#sfAdd', b).onclick = () => { if ($$('.oline', box).length >= 30) return toast('الحد 30 عينة', 'bad'); addLine(); };
+    const sel = $('#sfCustomer', b);
+    sel.onchange = () => $('#sfNew', b).classList.toggle('hidden', sel.value !== 'new');
+    $('#sfName', b).oninput = () => { const p = (s.prospects || []).find(x => x.name === $('#sfName', b).value.trim()); if (p && p.phone && !$('#sfPhone', b).value) $('#sfPhone', b).value = p.phone; };
+    if (pre.customer_id) sel.value = String(pre.customer_id);
+    if (pre.prospect) { sel.value = 'new'; $('#sfName', b).value = pre.prospect.name || ''; $('#sfPhone', b).value = pre.prospect.phone || ''; }
+    sel.onchange();
+    $('#sfSend', b).onclick = async e => {
+      const btn = e.currentTarget, err = $('#sfErr', b); err.classList.add('hidden');
+      const payload = { lines: [] };
+      let who;
+      if (!sel.value) return showErr(err, 'اختار العميل');
+      if (sel.value === 'new') {
+        const nm = $('#sfName', b).value.trim().replace(/\s+/g, ' '), ph = normDigits($('#sfPhone', b).value).replace(/[^0-9+]/g, '');
+        if (nm.length < 2) return showErr(err, 'اكتب اسم العميل');
+        if (ph && (ph.length < 7 || ph.length > 15)) return showErr(err, 'رقم التليفون مش مظبوط');
+        payload.prospect_name = nm; if (ph) payload.prospect_phone = ph; who = nm + ' (بيجرّب)';
+      } else { payload.customer_id = Number(sel.value); who = (customerById(sel.value) || {}).name; }
+      for (const [i, d] of $$('.oline', box).entries()) {
+        const pid = $('[data-f=product]', d).value;
+        if (!pid) return showErr(err, `العينة ${i + 1}: اختار الصنف`);
+        const code = $('[data-f=code]', d).value.trim(), q = $('[data-f=qty]', d).value.trim();
+        payload.lines.push({ product_id: Number(pid), ...(code ? { code } : {}), ...(q ? { qty: q } : {}) });
+      }
+      const note = $('#sfNote', b).value.trim(); if (note) payload.note = note;
+      if (!await confirmSheet('ابعت طلب العينة؟', `<div class="item"><b>${esc(who)}</b><ul class="lines">${payload.lines.map(l => `<li>${esc(productName(l.product_id))}${l.code ? ' — ' + esc(l.code) : ''}${l.qty ? ' — ' + esc(l.qty) : ''}</li>`).join('')}</ul></div>`, '📤 ابعت')) return;
+      btn.disabled = true;
+      try {
+        const r = await queue('sample', payload);
+        if (r.error) return showErr(err, 'المصنع مقبلش: ' + r.error);
+        sh.close(); tab = 'samples'; render();
+        toast(r === 'sent' ? '✅ طلب العينة اتبعت للمصنع' : '📱 اتحفظ على الموبايل — هيتبعت لوحده أول ما النت يرجع', r === 'sent' ? 'good' : '');
+      } catch (ex) { showErr(err, ex.message); }
+      finally { if (btn.isConnected) btn.disabled = false; }
+    };
+  }
 
   // ---------- بلاغات التحصيل
   const COL_STATE = { pending: ['مستني تأكيد الخزنة', 'warn'], confirmed: ['اتأكد', 'good'], rejected: ['مش واصل', 'bad'] };
@@ -271,21 +436,30 @@
     const v = $('#view');
     if (!data) { v.innerHTML = '<div class="empty">⏳ بيحمّل…</div>'; return; }
     if (!st()) { v.innerHTML = '<div class="note bad">حسابك متوقف من المصنع أو لسه متجهزش — كلّم المصنع.</div>'; return; }
-    ({ home: renderHome, order: renderOrder, customers: renderCustomers, prices: renderPrices, month: renderMonth })[tab](v);
+    v.onclick = null;                    // (كل شاشة بتحط بتاعتها)
+    ({ home: renderHome, order: renderOrder, samples: renderSamples, customers: renderCustomers, prices: renderPrices, month: renderMonth })[tab](v);
   }
   // (الطلب اللي بيتكتب بيفضل محفوظ لو راح يبص على الأسعار ورجع — لحد ما يتبعت أو «ابدأ من جديد»)
   $('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; tab = b.dataset.tab; render(); window.scrollTo(0, 0); });
   $('#refreshBtn').addEventListener('click', async () => { const b = $('#refreshBtn'); b.disabled = true; try { await sendOutbox(); await loadState(); toast(online ? '✅ اتحدّث' : '📵 مفيش نت'); } finally { b.disabled = false; } });
-  $('#view').addEventListener('click', async e => {
+  // (الأزرار اللي جوه الكروت — في الصفحة نفسها وفي الشيت اللي بيطلع من تحت)
+  async function cardClick(e) {
     const d = e.target.closest('[data-drop]');
-    if (d) { if (await confirmSheet('مسح', 'تمسح الحاجة دي من الموبايل؟ (مبتتبعتش)', 'امسح', 'danger')) { dropOut(d.dataset.drop); render(); } }
-  });
+    if (d) { if (await confirmSheet('مسح', 'تمسح الحاجة دي من الموبايل؟ (مبتتبعتش)', 'امسح', 'danger')) { dropOut(d.dataset.drop); render(); } return; }
+    const k = e.target.closest('[data-complain]');
+    if (k) complaintForm(Number(k.dataset.complain));
+  }
+  $('#view').addEventListener('click', cardClick);
+  $('#sheetRoot').addEventListener('click', e => { if (e.target.closest('[data-drop], [data-complain]')) cardClick(e); });
 
   function renderHome(v) {
-    const s = st(), orders = orderCards(), cols = collectionCards();
+    const s = st(), orders = orderCards(), cols = collectionCards(), ks = complaintCards();
     const debt = s.customers.reduce((t, c) => t + Math.max(0, Number(c.balance)), 0);
     const waiting = orders.filter(c => !['good', 'bad'].includes(c.stage[1])).length;      // (لسه مخرجتش ومش ملغية)
-    v.innerHTML = `<div class="cards">
+    const ready = (s.samples || []).filter(x => x.status === 'ready').length;
+    const openKs = ks.filter(k => !['good', 'bad'].includes(k.stage[1]));
+    v.innerHTML = `${ready ? `<button type="button" class="note good big-note" data-go="samples">🧪 فيه ${ready} طلب عينات جاهز — اضغط هنا</button>` : ''}
+      <div class="cards">
         <div class="card"><small>عملائي</small><strong>${s.customers.length}</strong></div>
         <div class="card"><small>مديونية عملائي</small><strong>${moneyHtml(debt)}</strong></div>
         <div class="card${cashWithMe() ? ' warn' : ''}"><small>نقدي معايا لسه متسلمش</small><strong>${moneyHtml(cashWithMe())}</strong></div>
@@ -294,9 +468,10 @@
       <div class="actions top0"><button type="button" class="primary" data-go="order">➕ طلب جديد</button><button type="button" class="good" data-col>💵 بلّغ عن تحصيل</button></div>
       <h3>طلباتي وطلبات عملائي</h3>
       <div class="list">${orders.slice(0, 20).map(orderCardHtml).join('') || '<div class="empty">لسه مفيش طلبات</div>'}</div>
+      ${ks.length ? `<h3>الشكاوى وطلبات الاستبدال${openKs.length ? ` (${openKs.length} مفتوحة)` : ''}</h3><div class="list">${ks.slice(0, 10).map(complaintCardHtml).join('')}</div>` : ''}
       <h3>بلاغات التحصيل</h3>
       <div class="list">${cols.slice(0, 15).map(collectionCardHtml).join('') || '<div class="empty">لسه مفيش بلاغات</div>'}</div>`;
-    $('[data-go="order"]', v).onclick = () => { tab = 'order'; render(); };
+    $$('[data-go]', v).forEach(b => { b.onclick = () => { tab = b.dataset.go; render(); window.scrollTo(0, 0); }; });
     $('[data-col]', v).onclick = () => collectionForm(null);
   }
 
@@ -308,7 +483,8 @@
       <div class="note">الطلب بيوصل للمبيعات في المصنع يراجعوه ويحولوه لعرض سعر أو فاتورة. الأسعار تحت تقريبية من قائمة الأسعار — السعر النهائي من المصنع.</div>
       <label>العميل<select id="ofCustomer"><option value="">— اختار العميل —</option>
         ${s.customers.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}<option value="new">+ عميل جديد</option></select></label>
-      <div id="ofNew" class="hidden"><div class="row"><label>اسم العميل الجديد<input id="ofNewName" maxlength="120"></label><label>تليفونه<input id="ofNewPhone" dir="ltr" inputmode="tel" maxlength="15"></label></div></div>
+      <div id="ofNew" class="hidden"><div class="row"><label>اسم العميل الجديد<input id="ofNewName" maxlength="120" list="ofProspects"></label><label>تليفونه<input id="ofNewPhone" dir="ltr" inputmode="tel" maxlength="15"></label></div></div>
+      <datalist id="ofProspects">${(s.prospects || []).map(p => `<option value="${esc(p.name)}"></option>`).join('')}</datalist>
       <datalist id="pkTypes"><option value="شكارة"></option><option value="بستلة"></option><option value="جالون"></option><option value="برميل"></option><option value="كرتونة"></option></datalist>
       <div id="ofLines"></div>
       <button type="button" class="secondary big" id="ofAdd">+ صنف تاني</button>
@@ -395,6 +571,8 @@
     box.addEventListener('input', recalc);
     $('#ofCustomer', v).addEventListener('change', () => { $('#ofNew', v).classList.toggle('hidden', $('#ofCustomer', v).value !== 'new'); recalc(); });
     ['#ofNote', '#ofNewName', '#ofNewPhone'].forEach(s2 => $(s2, v).addEventListener('input', recalc));
+    // (عميل بيجرّب من العينات ← تليفونه بيتكتب لوحده)
+    $('#ofNewName', v).addEventListener('input', () => { const p = (s.prospects || []).find(x => x.name === $('#ofNewName', v).value.trim()); if (p && p.phone && !$('#ofNewPhone', v).value) { $('#ofNewPhone', v).value = p.phone; recalc(); } });
     $('#ofAdd', v).addEventListener('click', () => { if ($$('.oline', box).length >= 50) return toast('الحد 50 صنف', 'bad'); addLine(); recalc(); });
     // (لو رجع للطلب اللي كان بيكتبه)
     $('#ofCustomer', v).value = [...$('#ofCustomer', v).options].some(o => o.value === String(d.customer)) ? String(d.customer) : '';
@@ -503,9 +681,19 @@
   // ---------- العملاء
   function renderCustomers(v) {
     const s = st();
+    const prospects = s.prospects || [];
     v.innerHTML = `<h2>عملائي (${s.customers.length})</h2>
       <input type="search" class="search" id="cuSearch" placeholder="🔍 بحث باسم العميل">
-      <div class="list" id="cuList"></div>`;
+      <div class="list" id="cuList"></div>
+      ${prospects.length ? `<h3>عملاء بيجرّبوا (طلبوا عينات ولسه مش متسجلين — محفوظين باسمك)</h3>
+        <div class="list">${prospects.map((p, i) => `<div class="item"><div class="item-head"><b>${esc(p.name)}</b><span class="chip gray">بيجرّب</span></div>
+          <div class="item-sub">${p.phone ? `<span class="num">${esc(p.phone)}</span> — ` : ''}آخر عينة ${esc(fmtDate(p.last_at))}</div>
+          <div class="actions"><button type="button" class="secondary" data-ps-sample="${i}">🧪 عينة تانية</button><button type="button" class="primary" data-ps-order="${i}">➕ طلب منتج</button></div></div>`).join('')}</div>` : ''}`;
+    v.onclick = e => {
+      const a = e.target.closest('[data-ps-sample]'); if (a) return sampleForm({ prospect: prospects[Number(a.dataset.psSample)] });
+      const o = e.target.closest('[data-ps-order]');
+      if (o) { const p = prospects[Number(o.dataset.psOrder)]; orderDraft = { customer: 'new', newName: p.name, newPhone: p.phone || '', lines: [{}] }; tab = 'order'; render(); }
+    };
     const paint = () => {
       const q = $('#cuSearch', v).value.trim().toLowerCase();
       const list = s.customers.filter(c => !q || c.name.toLowerCase().includes(q));
