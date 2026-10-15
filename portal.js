@@ -204,7 +204,8 @@
   const lineText = l => `${l.item || productName(l.product_id)} — ${l.unit === 'ton' ? tons(l.kg ?? l.quantity_kg) : `${qty(l.count)} ${l.type || l.package_type} × ${qty(l.weight)} كجم`}${l.code ? ' — ' + l.code : ''}${batchText(l)}`;
   function stageOf(g) {
     const live = g.filter(d => d.type === 'invoice' && !['cancelled', 'rejected'].includes(d.status)).pop() || g[g.length - 1];
-    const ex = g.find(d => d.exit_no);
+    const ex = g.filter(d => d.exit_no).pop();                       // (آخر تسليم خرج — وأول ما المبيعات تعلّم «✅ اتسلّمت» بيبقى «وصل العميل»)
+    if (ex && ex.received_at) return [`✅ وصل العميل ${fmtDate(ex.received_at)}`, 'good'];
     if (ex) return [`✅ خرج من المصنع ${fmtDate(ex.exit_at)}`, 'good'];
     if (live.status === 'cancelled') return ['اتلغى', 'bad'];
     if (live.status === 'rejected') return ['المصنع رفضه', 'bad'];

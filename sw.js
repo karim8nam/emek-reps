@@ -1,7 +1,7 @@
 // الصفحة بتفتح حتى من غير نت (آخر نسخة اتفتحت)، والطلبات اللي اتكتبت بتستنى على الموبايل لحد النت ما يرجع.
 // دايمًا بيجيب من النت الأول (عشان أي تحديث للصفحة يوصل على طول)، ولو مفيش نت بيفتح المحفوظ.
 // (اتصالات Supabase نفسها مش بتعدي من هنا — دي صفحات الموقع بس.)
-const CACHE = 'emek-portal-0.16.0';
+const CACHE = 'emek-portal-0.18.0';
 self.addEventListener('install', e => { self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(self.clients.claim()); });
 self.addEventListener('fetch', e => {
