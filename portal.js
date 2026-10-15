@@ -211,33 +211,83 @@
     if (live.status === 'rejected') return ['المصنع رفضه', 'bad'];
     if (live.track && live.status === 'approved') return [live.track, ''];
     if (live.type === 'invoice') return live.status === 'approved' ? ['فاتورة معتمدة — بتتجهز', ''] : ['فاتورة مستنية الموافقة', 'warn'];
-    return live.status === 'approved' ? ['عرض سعر معتمد', ''] : ['عرض سعر مستني الموافقة', 'warn'];
+    if (live.confirmed_at) return live.status === 'approved' ? ['طلب — بيتجهز', ''] : ['طلب مستني الموافقة', 'warn'];
+    const cs = live.status === 'approved' ? confirmState(live.id) : null;
+    if (cs && cs.waiting) return ['✅ العميل أكّد — بيتبعت', 'gray'];
+    if (cs && cs.error) return ['«العميل أكّد» مقبلش', 'bad'];                // (السبب تحت في الكارت)
+    return live.status === 'approved' ? ['اتوافق — مستني العميل', ''] : ['عرض سعر مستني الموافقة', 'warn'];
   }
+  // «✅ العميل أكّد» اللي لسه في الطريق (على الموبايل أو في الصندوق) أو اللي المصنع مقبلوش
+  function confirmState(docId) {
+    const o = outbox().find(x => x.kind === 'quote_confirm' && Number(x.payload.doc_id) === Number(docId));
+    if (o) return o.state === 'failed' ? { error: o.error, out: o } : { waiting: true };
+    const ins = (data.inbox || []).filter(x => x.kind === 'quote_confirm' && Number((x.payload || {}).doc_id) === Number(docId));
+    if (ins.some(x => !x.error)) return { waiting: true };
+    return ins.length ? { error: ins[0].error } : null;                    // (الصندوق جاي الأحدث الأول)
+  }
+  // عرض السعر المعتمد اللي العميل لسه مأكّدهوش ← زرار «✅ العميل أكّد»
+  const confirmable = g => {
+    const q = (g || []).find(d => d.type === 'quote');
+    if (!q || q.status !== 'approved' || q.confirmed_at || q.converted) return null;
+    const cs = confirmState(q.id);
+    return cs && cs.waiting ? null : q;
+  };
+  const docLabel = d => `${d.type === 'invoice' ? 'فاتورة' : d.confirmed_at ? 'طلب' : 'عرض سعر'} ${d.number}`;
+  // سعر القائمة لسطر (للي لسه على الموبايل) — null لو ملوش سعر
+  const listPrice = l => {
+    const p = ((st() && st().products) || []).find(x => Number(x.id) === Number(l.product_id));
+    if (!p) return null;
+    if (l.unit === 'ton') return p.ton ? p.ton.price : null;
+    const x = p.packages.find(k => k.type === (l.type || l.package_type) && Number(k.weight) === Number(l.weight));
+    return x ? x.price : null;
+  };
+  // قيمة عرض السعر بأسعار القائمة — زي المصنع بالظبط (سطر الطن بيتقرّب للقرش، والضريبة 14% على الإجمالي) ← نص أو null
+  const quoteTotal = (lines, isTax) => {
+    let sub = 0n;
+    for (const l of lines || []) {
+      const raw = l.price != null ? l.price : listPrice(l), pr = raw != null ? parseScaled(String(raw), 2) : null;
+      if (pr == null) return null;
+      if (l.unit === 'ton') { const t = parseScaled(String(l.kg ?? l.quantity_kg), 3); if (t == null) return null; sub += (t * pr + 500000n) / 1000000n; }
+      else { const n = parseScaled(String(l.count), 0); if (n == null) return null; sub += n * pr; }
+    }
+    return scaledToString(sub + (isTax ? (sub * 14n + 50n) / 100n : 0n), 2);
+  };
+  const KIND_CHIP = '<span class="chip gray">🧾 عرض سعر</span>';
   function orderCards() {
     const s = st(); if (!s) return [];
-    const inbox = (data.inbox || []).filter(i => i.kind === 'order'), out = outbox().filter(x => x.kind === 'order');
+    const isOrder = k => k === 'order' || k === 'quote';
+    const inbox = (data.inbox || []).filter(i => isOrder(i.kind)), out = outbox().filter(x => isOrder(x.kind));
     const groups = new Map();
     for (const d of [...s.docs].sort((a, b) => a.id - b.id)) { const r = Number(d.root); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(d); }
     const cards = [], used = new Set(), known = new Set(s.orders.map(o => o.uid));
+    const fromPayload = (p, kind) => ({ kind, lines: (p.lines || []).map(l => ({ ...l, kg: l.quantity_kg })), total: kind === 'quote' ? quoteTotal(p.lines, p.is_tax) : null });
     for (const o of out) cards.push({ at: o.created_at, customer: o.payload.customer_id ? (customerById(o.payload.customer_id) || {}).name : o.payload.new_customer_name,
-      stage: o.state === 'failed' ? ['مقبلش: ' + o.error, 'bad'] : ['على الموبايل — لسه متبعتش', 'gray'], lines: o.payload.lines.map(l => ({ ...l, kg: l.quantity_kg })), out: o });
+      stage: o.state === 'failed' ? ['مقبلش: ' + o.error, 'bad'] : ['على الموبايل — لسه متبعتش', 'gray'], ...fromPayload(o.payload, o.kind), out: o });
     for (const i of inbox) {
       if (known.has(i.uid) || out.some(x => x.uid === i.uid)) continue;
       const p = i.payload || {};
       cards.push({ at: i.created_at, customer: p.customer_id ? (customerById(p.customer_id) || {}).name : p.new_customer_name,
-        stage: i.error ? ['مقبلش: ' + i.error, 'bad'] : i.delivered ? ['وصل المصنع', 'warn'] : ['اتبعت — مستني المصنع يستلمه', 'gray'], lines: (p.lines || []).map(l => ({ ...l, kg: l.quantity_kg })) });
+        stage: i.error ? ['مقبلش: ' + i.error, 'bad'] : i.delivered ? ['وصل المصنع', 'warn'] : ['اتبعت — مستني المصنع يستلمه', 'gray'], ...fromPayload(p, i.kind) });
     }
     for (const o of s.orders) {
       let g = null;
       if (o.doc_id) { const d = s.docs.find(x => Number(x.id) === Number(o.doc_id)); if (d) { g = groups.get(Number(d.root)); used.add(Number(d.root)); } }
-      const stage = o.status === 'rejected' ? ['اترفض: ' + (o.reason || ''), 'bad'] : o.status === 'pending' ? (o.lines.some(l => l.batch) ? ['وصل المصنع — بيتصنع', 'warn'] : ['وصل المصنع — بيتراجع', 'warn']) : g ? stageOf(g) : ['اتسجل', ''];
+      const isQ = o.kind === 'quote';
+      const stage = o.status === 'rejected' ? (isQ ? ['المدير رفضه', 'bad'] : ['اترفض: ' + (o.reason || ''), 'bad'])
+        : o.status === 'pending' ? (isQ ? ['مستني موافقة المدير', 'warn'] : o.lines.some(l => l.batch) ? ['وصل المصنع — بيتصنع', 'warn'] : ['وصل المصنع — بيتراجع', 'warn'])
+        : g ? stageOf(g) : ['اتسجل', ''];
       const liveDoc = g ? (g.filter(d => d.type === 'invoice').pop() || g[g.length - 1]) : null;
-      cards.push({ at: o.created_at, customer: o.customer, stage, lines: liveDoc ? liveDoc.lines : o.lines, number: liveDoc ? `${liveDoc.type === 'quote' ? 'عرض' : 'فاتورة'} ${liveDoc.number}` : 'طلب ' + o.id, mine: true, invoice: exitedInvoice(g) });
+      const q = g ? g.find(d => d.type === 'quote') : null, cs = q ? confirmState(q.id) : null;
+      cards.push({ at: o.created_at, customer: o.customer, stage, lines: liveDoc ? liveDoc.lines : o.lines, number: liveDoc ? docLabel(liveDoc) : isQ ? '' : 'طلب ' + o.id, mine: true,
+        kind: liveDoc ? null : o.kind, total: isQ ? (liveDoc ? liveDoc.total : quoteTotal(o.lines, o.is_tax)) : null, invoice: exitedInvoice(g), quote: confirmable(g),
+        out: cs && cs.out, why: isQ && o.status === 'rejected' ? 'السبب: ' + (o.reason || '') : cs && cs.error });
     }
     for (const [r, g] of groups) {
       if (used.has(r)) continue;
       const liveDoc = g.filter(d => d.type === 'invoice').pop() || g[g.length - 1];
-      cards.push({ at: g[0].created_at, customer: liveDoc.customer, stage: stageOf(g), lines: liveDoc.lines, number: `${liveDoc.type === 'quote' ? 'عرض' : 'فاتورة'} ${liveDoc.number}`, invoice: exitedInvoice(g) });
+      const q = g.find(d => d.type === 'quote'), cs = q ? confirmState(q.id) : null;
+      cards.push({ at: g[0].created_at, customer: liveDoc.customer, stage: stageOf(g), lines: liveDoc.lines, number: docLabel(liveDoc), invoice: exitedInvoice(g), quote: confirmable(g),
+        out: cs && cs.out, why: cs && cs.error });
     }
     return cards.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   }
@@ -247,12 +297,29 @@
   const orderCardHtml = c => {
     const ks = c.invoice ? complaintsOn(c.invoice.id) : [];
     return `<div class="item"><div class="item-head"><b>${esc(c.customer || '—')}</b><span class="chip ${c.stage[1]}">${esc(c.stage[0])}</span></div>
-    <div class="item-sub">${c.number ? esc(c.number) + ' — ' : ''}${esc(fmtDateTime(c.at))}</div>
+    <div class="item-sub">${c.kind === 'quote' ? KIND_CHIP + ' ' : ''}${c.number ? esc(c.number) + ' — ' : ''}${esc(fmtDateTime(c.at))}${c.total != null ? ' — ' + moneyHtml(c.total) : ''}</div>
     <ul class="lines">${(c.lines || []).map(l => `<li>${esc(lineText(l))}</li>`).join('')}</ul>
     ${ks.map(k => `<div class="item-sub">⚠️ ${esc(COMPLAINT_KIND[k.kind] || '')}: <span class="chip ${k.stage[1]}">${esc(k.stage[0])}</span></div>`).join('')}
+    ${c.why ? `<div class="note bad mt12">${esc(c.why)}</div>` : ''}
     ${c.out && c.out.state === 'failed' ? `<div class="actions"><button type="button" class="danger" data-drop="${esc(c.out.uid)}">امسحه</button></div>` : ''}
+    ${c.quote ?`<div class="actions"><button type="button" class="good" data-qconfirm="${c.quote.id}">✅ العميل أكّد (يبقى طلب)</button></div>` : ''}
     ${c.invoice ? `<div class="actions"><button type="button" class="secondary" data-complain="${c.invoice.id}">⚠️ مشكلة في الطلب (ناقص / لون غلط)</button></div>` : ''}</div>`;
   };
+
+  // «✅ العميل أكّد» عرض السعر ← بيبقى طلب (المبيعات بتتابعه والمصنع بيبدأ)
+  async function quoteConfirm(id) {
+    const d = st().docs.find(x => Number(x.id) === Number(id)); if (!d) return;
+    if (!await confirmSheet('العميل أكّد عرض السعر؟', `<div class="item"><div class="item-head"><b>${esc(d.customer)}</b>${moneyHtml(d.total)}</div>
+      <div class="item-sub">عرض سعر ${esc(d.number)}${d.is_tax ? ' — ضريبية' : ''}</div><ul class="lines">${(d.lines || []).map(l => `<li>${esc(lineText(l))}</li>`).join('')}</ul></div>
+      <div class="note">بعد التأكيد بيبقى «طلب»: المبيعات بتتابعه والمصنع بيبدأ يجهّزه.</div>`, '✅ العميل أكّد', 'good')) return;
+    try {
+      const r = await queue('quote_confirm', { doc_id: Number(id) });
+      if (r.error) return toast('المصنع مقبلش: ' + r.error, 'bad');
+      $$('#sheetRoot .sheet').forEach(x => x.remove());
+      render();
+      toast(r === 'sent' ? '✅ اتبعت — عرض السعر بقى طلب' : '📱 اتحفظ على الموبايل — هيتبعت لوحده أول ما النت يرجع', r === 'sent' ? 'good' : '');
+    } catch (ex) { toast(ex.message, 'bad'); }
+  }
 
   // ---------- الشكاوى وطلبات الاستبدال
   const COMPLAINT_KIND = { short: 'وصل ناقص', wrong_color: 'لونه غلط', not_requested: 'مش ده المطلوب', damaged: 'وصل تالف', other: 'مشكلة تانية' };
@@ -514,16 +581,25 @@
     const acc = id => (s.accounts.find(a => Number(a.id) === Number(id)) || {}).name;
     return [
       ...out.map(o => ({ at: o.created_at, customer: (customerById(o.payload.customer_id) || {}).name, amount: o.payload.amount, method: o.payload.method, account: acc(o.payload.account_id),
-        stage: o.state === 'failed' ? ['مقبلش: ' + o.error, 'bad'] : ['على الموبايل — لسه متبعتش', 'gray'], out: o })),
+        target: colTarget(o.payload), stage: o.state === 'failed' ? ['مقبلش: ' + o.error, 'bad'] : ['على الموبايل — لسه متبعتش', 'gray'], out: o })),
       ...inbox.map(i => ({ at: i.created_at, customer: (customerById(i.payload.customer_id) || {}).name, amount: i.payload.amount, method: i.payload.method, account: acc(i.payload.account_id),
-        stage: i.error ? ['مقبلش: ' + i.error, 'bad'] : ['اتبعت — مستني المصنع يستلمه', 'gray'] })),
+        target: colTarget(i.payload), stage: i.error ? ['مقبلش: ' + i.error, 'bad'] : ['اتبعت — مستني المصنع يستلمه', 'gray'] })),
       ...s.collections.map(c => ({ at: c.created_at, customer: c.customer, amount: c.amount, method: c.method, account: c.account,
+        target: c.on_opening && !c.doc_number ? 'رصيد قديم' : c.doc_number ? 'فاتورة ' + c.doc_number : '',
         stage: c.status === 'confirmed' && c.reversed ? ['اتلغى التوريد (تصحيح من المصنع)', 'bad'] : COL_STATE[c.status] || [c.status, ''],
         extra: c.status === 'confirmed' && Number(c.confirmed_amount) !== Number(c.amount) ? 'وصل ' + money(c.confirmed_amount) : c.status === 'rejected' ? c.note : c.status === 'confirmed' && c.note ? c.note : '' })),
     ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   }
+  // البلاغ على إيه: «فاتورة N» أو «رصيد قديم»
+  const colTarget = p => {
+    if (!p) return '';
+    if (p.opening) return 'رصيد قديم';
+    if (!p.doc_id) return '';
+    const c = customerById(p.customer_id), v = ((c && c.invoices) || []).find(x => Number(x.id) === Number(p.doc_id)) || ((st() && st().docs) || []).find(x => Number(x.id) === Number(p.doc_id));
+    return v ? 'فاتورة ' + v.number : 'فاتورة';
+  };
   const collectionCardHtml = c => `<div class="item"><div class="item-head"><b>${esc(c.customer || '—')}</b><span class="chip ${c.stage[1]}">${esc(c.stage[0])}</span></div>
-    <div class="item-sub">${moneyHtml(normDigits(c.amount))} — ${c.method === 'cash' ? 'نقدي معايا' : 'تحويل' + (c.account ? ' على «' + esc(c.account) + '»' : '')} — ${esc(fmtDateTime(c.at))}</div>
+    <div class="item-sub">${moneyHtml(normDigits(c.amount))}${c.target ? ' — ' + esc(c.target) : ''} — ${c.method === 'cash' ? 'نقدي معايا' : 'تحويل' + (c.account ? ' على «' + esc(c.account) + '»' : '')} — ${esc(fmtDateTime(c.at))}</div>
     ${c.extra ? `<div class="item-sub">${esc(c.extra)}</div>` : ''}
     ${c.out && c.out.state === 'failed' ? `<div class="actions"><button type="button" class="danger" data-drop="${esc(c.out.uid)}">امسحه</button></div>` : ''}</div>`;
   // النقدي اللي معايا ولسه متسلمش (عهدة)
@@ -549,9 +625,10 @@
     if (k) return complaintForm(Number(k.dataset.complain));
     const ap = e.target.closest('[data-sapprove]'); if (ap) return sampleApproveSheet(Number(ap.dataset.sapprove));
     const sp = e.target.closest('[data-sproblem]'); if (sp) return sampleProblemForm(Number(sp.dataset.sproblem));
+    const qc = e.target.closest('[data-qconfirm]'); if (qc) return quoteConfirm(Number(qc.dataset.qconfirm));
   }
   $('#view').addEventListener('click', cardClick);
-  $('#sheetRoot').addEventListener('click', e => { if (e.target.closest('[data-drop], [data-complain], [data-sapprove], [data-sproblem]')) cardClick(e); });
+  $('#sheetRoot').addEventListener('click', e => { if (e.target.closest('[data-drop], [data-complain], [data-sapprove], [data-sproblem], [data-qconfirm]')) cardClick(e); });
 
   function renderHome(v) {
     const s = st(), orders = orderCards(), cols = collectionCards(), ks = complaintCards();
@@ -580,9 +657,12 @@
   function renderOrder(v) {
     const s = st();
     const d = orderDraft || { customer: '', lines: [{}], note: '' };
+    // «طلب» ← المبيعات تتابعه. «عرض سعر» ← بأسعار القائمة بالظبط، والمدير يوافق (مش من العينات، ولعميل من عملائي بس)
+    let kind = d.sample_id ? 'order' : d.kind === 'quote' ? 'quote' : 'order';
     v.innerHTML = `<h2>طلب جديد</h2>
-      ${d.sample_id ? `<div class="note good">🧪 طلبية من العينات اللي العميل اعتمدها (طلب عينات رقم ${esc(d.sample_id)}) — الأصناف والكود متكتبين، اكتب الكمية لكل صنف (بالطن أو بالعبوة). الأصناف دي هتتسجل إن العميل اعتمدها.</div>` : ''}
-      <div class="note">الطلب بيوصل للمبيعات في المصنع يراجعوه ويحولوه لعرض سعر أو فاتورة. الأسعار تحت تقريبية من قائمة الأسعار — السعر النهائي من المصنع.</div>
+      ${d.sample_id ? `<div class="note good">🧪 طلبية من العينات اللي العميل اعتمدها (طلب عينات رقم ${esc(d.sample_id)}) — الأصناف والكود متكتبين، اكتب الكمية لكل صنف (بالطن أو بالعبوة). الأصناف دي هتتسجل إن العميل اعتمدها.</div>`
+        : '<div class="seg" id="ofKind"><button type="button" data-k="order">📥 طلب (المبيعات تتابعه)</button><button type="button" data-k="quote">🧾 عرض سعر (المدير يوافق)</button></div>'}
+      <div class="note" id="ofKindNote"></div>
       <label>العميل<select id="ofCustomer"><option value="">— اختار العميل —</option>
         ${s.customers.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}<option value="new">+ عميل جديد</option></select></label>
       <div id="ofNew" class="hidden"><div class="row"><label>اسم العميل الجديد<input id="ofNewName" maxlength="120" list="ofProspects"></label><label>تليفونه<input id="ofNewPhone" dir="ltr" inputmode="tel" maxlength="15"></label></div></div>
@@ -591,7 +671,8 @@
       <div id="ofLines"></div>
       <button type="button" class="secondary big" id="ofAdd">+ صنف تاني</button>
       <label class="mt12">ملاحظات للمصنع (اختياري)<textarea id="ofNote" maxlength="500"></textarea></label>
-      <div class="total"><span>تقريبًا (حسب القائمة)</span><b id="ofTotal">—</b></div>
+      <label class="check-line hidden" id="ofTaxBox"><input type="checkbox" id="ofTax"> <span>ضريبية (+14% ضريبة القيمة المضافة)</span></label>
+      <div class="total"><span id="ofTotalLbl">تقريبًا (حسب القائمة)</span><b id="ofTotal">—</b></div>
       <div class="error hidden" id="ofErr"></div>
       <button type="button" class="primary big" id="ofSend">📤 ابعت الطلب</button>
       <button type="button" class="link mt12" id="ofReset">🗑️ ابدأ من جديد</button>`;
@@ -609,10 +690,12 @@
       div.dataset.pid = pid;
       const pk = $('[data-f=pk]', div), cur = same ? pk.value : '';
       const list = p ? p.packages : [];
-      pk.innerHTML = list.map((x, i) => `<option value="${i}">${esc(x.type)} ${qty(x.weight)} كجم — ${esc(money(x.price))}</option>`).join('') + '<option value="other">عبوة تانية…</option>';
-      pk.value = [...pk.options].some(o => o.value === cur) ? cur : (list.length ? '0' : 'other');
+      // (عرض السعر بأسعار القائمة بس ← مفيش «عبوة تانية»)
+      pk.innerHTML = list.map((x, i) => `<option value="${i}">${esc(x.type)} ${qty(x.weight)} كجم — ${esc(money(x.price))}</option>`).join('') + (kind === 'quote' ? '' : '<option value="other">عبوة تانية…</option>');
+      pk.value = [...pk.options].some(o => o.value === cur) ? cur : (list.length ? '0' : kind === 'quote' ? '' : 'other');
       $('[data-other]', div).classList.toggle('hidden', pk.value !== 'other');
-      $('[data-hint]', div).textContent = p ? (unit === 'ton' ? (p.ton ? `سعر الطن في القائمة: ${money(p.ton.price)}` : 'سعر الطن من المصنع') : '') : '';
+      $('[data-hint]', div).textContent = !p ? '' : unit === 'ton' ? (p.ton ? `سعر الطن في القائمة: ${money(p.ton.price)}` : kind === 'quote' ? '⚠️ ملوش سعر طن في القائمة — اعمله «طلب»' : 'سعر الطن من المصنع')
+        : kind === 'quote' && !list.length ? '⚠️ ملوش سعر عبوة في القائمة — اعمله «طلب»' : '';
     };
     const addLine = (l = {}) => {
       const div = document.createElement('div');
@@ -643,11 +726,13 @@
         if (t == null || t <= 0n) return { bad: 'اكتب الكمية بالطن' };
         const kg = scaledToString(t, 3);                                       // طن بـ6 كسور = كيلو بـ3
         const price = p.ton ? parseScaled(String(p.ton.price), 2) : null;
+        if (kind === 'quote' && price == null) return { bad: `«${p.name}» ملوش سعر طن في القائمة — اعمله «طلب»` };
         return { line: { product_id: p.id, unit: 'ton', quantity_kg: kg, ...extra }, est: price != null ? (t * price + 500000n) / 1000000n : null };
       }
       const cnt = parseScaled($('[data-f=count]', div).value, 0);
       if (cnt == null || cnt <= 0n) return { bad: 'اكتب عدد العبوات' };
       const pk = $('[data-f=pk]', div).value;
+      if (kind === 'quote' && (pk === '' || pk === 'other')) return { bad: `«${p.name}» ملوش سعر عبوة في القائمة — اعمله «طلب»` };
       if (pk !== 'other') {
         const x = p.packages[Number(pk)];
         return { line: { product_id: p.id, unit: 'package', package_type: x.type, weight: String(Number(x.weight)), count: cnt.toString(), ...extra }, est: cnt * parseScaled(String(x.price), 2) };
@@ -657,13 +742,30 @@
       if (w == null || w <= 0n) return { bad: 'اكتب وزن العبوة' };
       return { line: { product_id: p.id, unit: 'package', package_type: tp, weight: scaledToString(w, 3), count: cnt.toString(), ...extra }, est: null };
     };
+    const isTax = () => kind === 'quote' && $('#ofTax', v).checked;
     const recalc = () => {
       let total = 0n, any = false, unknown = false;
       for (const div of $$('.oline', box)) { const r = readLine(div); if (r.est != null) { total += r.est; any = true; } else if (!r.bad) unknown = true; }
+      if (isTax()) total += (total * 14n + 50n) / 100n;                      // (زي المصنع: 14% على الإجمالي، بالقرش)
       $('#ofTotal', v).textContent = any ? money(scaledToString(total, 2)) + (unknown ? ' + أصناف سعرها من المصنع' : '') : '—';
       orderDraft = snapshot();
     };
-    const snapshot = () => ({ customer: $('#ofCustomer', v).value, newName: $('#ofNewName', v).value, newPhone: $('#ofNewPhone', v).value, note: $('#ofNote', v).value, sample_id: d.sample_id || null,
+    // نوع الطلب: النص والضريبة والعميل الجديد والعبوات
+    const paintKind = () => {
+      const q = kind === 'quote';
+      $$('#ofKind button', v).forEach(b => b.classList.toggle('on', b.dataset.k === kind));
+      $('#ofKindNote', v).innerHTML = q
+        ? 'عرض السعر بأسعار القائمة بالظبط ← بيروح لمدير الحسابات يوافق عليه. بعد الموافقة ابعته للعميل، ولما يوافق دوس <b>«✅ العميل أكّد»</b> ← بيبقى طلب والمصنع يبدأ.'
+        : 'الطلب بيوصل للمبيعات في المصنع يراجعوه ويحولوه لعرض سعر أو فاتورة. الأسعار تحت تقريبية من قائمة الأسعار — السعر النهائي من المصنع.';
+      $('#ofTaxBox', v).classList.toggle('hidden', !q);
+      const nw = $('#ofCustomer option[value="new"]', v); nw.hidden = q; nw.disabled = q;
+      if (q && $('#ofCustomer', v).value === 'new') $('#ofCustomer', v).value = '';
+      $('#ofNew', v).classList.toggle('hidden', $('#ofCustomer', v).value !== 'new');
+      $('#ofTotalLbl', v).textContent = q ? 'إجمالي عرض السعر (بأسعار القائمة)' : 'تقريبًا (حسب القائمة)';
+      $('#ofSend', v).textContent = q ? '📤 ابعت عرض السعر للمدير' : '📤 ابعت الطلب';
+      $$('.oline', box).forEach(paintLine);
+    };
+    const snapshot = () => ({ kind, tax: $('#ofTax', v).checked, customer: $('#ofCustomer', v).value, newName: $('#ofNewName', v).value, newPhone: $('#ofNewPhone', v).value, note: $('#ofNote', v).value, sample_id: d.sample_id || null,
       lines: $$('.oline', box).map(div => ({ product_id: $('[data-f=product]', div).value, unit: div.dataset.unit, tons: $('[data-f=tons]', div).value, pk: $('[data-f=pk]', div).value,
         count: $('[data-f=count]', div).value, ptype: $('[data-f=ptype]', div).value, weight: $('[data-f=weight]', div).value, code: $('[data-f=code]', div).value, sline: div.dataset.sline || null })) });
     box.addEventListener('click', e => {
@@ -688,15 +790,20 @@
     $('#ofCustomer', v).value = [...$('#ofCustomer', v).options].some(o => o.value === String(d.customer)) ? String(d.customer) : '';
     $('#ofNew', v).classList.toggle('hidden', $('#ofCustomer', v).value !== 'new');
     $('#ofNewName', v).value = d.newName || ''; $('#ofNewPhone', v).value = d.newPhone || ''; $('#ofNote', v).value = d.note || '';
+    $('#ofTax', v).checked = !!d.tax;
     (d.lines && d.lines.length ? d.lines : [{}]).forEach(addLine);
+    if ($('#ofKind', v)) $('#ofKind', v).addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (!b || b.dataset.k === kind) return; kind = b.dataset.k; paintKind(); recalc(); });
+    $('#ofTax', v).addEventListener('change', recalc);
+    paintKind();
     recalc();
     $('#ofReset', v).onclick = async () => { if (await confirmSheet('ابدأ من جديد', 'تمسح الطلب اللي بتكتبه؟', 'امسح', 'danger')) { orderDraft = null; renderOrder(v); } };
 
     $('#ofSend', v).addEventListener('click', async e => {
       const btn = e.currentTarget;                                     // (بعد أي await بيبقى null)
       const err = $('#ofErr', v); err.classList.add('hidden');
-      const cv = $('#ofCustomer', v).value;
+      const cv = $('#ofCustomer', v).value, q = kind === 'quote';
       if (!cv) return showErr(err, 'اختار العميل');
+      if (q && cv === 'new') return showErr(err, 'عرض السعر لعميل من عملائك بس — العميل الجديد اعمله «طلب»');
       const payload = { lines: [] };
       let who;
       if (cv === 'new') {
@@ -711,25 +818,41 @@
       payload.lines = rows.map(r => r.line);
       if (d.sample_id && payload.lines.some(l => l.sample_line_no)) payload.sample_id = d.sample_id;      // (طلبية من عينات العميل اعتمدها)
       const note = $('#ofNote', v).value.trim(); if (note) payload.note = note;
-      if (!await confirmSheet('ابعت الطلب؟', `<div class="item"><div class="item-head"><b>${esc(who)}</b></div><ul class="lines">${payload.lines.map(l => `<li>${esc(lineText({ ...l, kg: l.quantity_kg }))}</li>`).join('')}</ul>${note ? `<div class="item-sub">${esc(note)}</div>` : ''}</div>`, '📤 ابعت')) return;
+      if (q) payload.is_tax = isTax();
+      const tot = q ? quoteTotal(payload.lines, payload.is_tax) : null;
+      if (!await confirmSheet(q ? 'تبعت عرض السعر للمدير؟' : 'ابعت الطلب؟', `<div class="item"><div class="item-head"><b>${esc(who)}</b>${tot != null ? moneyHtml(tot) : ''}</div>${q ? `<div class="item-sub">${KIND_CHIP} بأسعار القائمة${payload.is_tax ? ' — ضريبية' : ''}</div>` : ''}<ul class="lines">${payload.lines.map(l => `<li>${esc(lineText({ ...l, kg: l.quantity_kg }))}</li>`).join('')}</ul>${note ? `<div class="item-sub">${esc(note)}</div>` : ''}</div>`, '📤 ابعت')) return;
       btn.disabled = true;
       try {
-        const r = await queue('order', payload);
-        if (r.error) return showErr(err, 'المصنع مقبلش الطلب: ' + r.error);
+        const r = await queue(q ? 'quote' : 'order', payload);
+        if (r.error) return showErr(err, (q ? 'المصنع مقبلش عرض السعر: ' : 'المصنع مقبلش الطلب: ') + r.error);
         orderDraft = null; tab = 'home'; render();
-        toast(r === 'sent' ? '✅ الطلب اتبعت للمصنع' : '📱 الطلب اتحفظ على الموبايل — هيتبعت لوحده أول ما النت يرجع', r === 'sent' ? 'good' : '');
+        toast(r === 'sent' ? (q ? '✅ عرض السعر اتبعت للمدير' : '✅ الطلب اتبعت للمصنع') : `📱 ${q ? 'عرض السعر' : 'الطلب'} اتحفظ على الموبايل — هيتبعت لوحده أول ما النت يرجع`, r === 'sent' ? 'good' : '');
       } catch (ex) { showErr(err, ex.message); }
       finally { if (btn.isConnected) btn.disabled = false; }
     });
   }
 
   // ---------- بلاغ تحصيل
-  function collectionForm(customerId) {
+  // الباقي اللي ينفع يتبلّغ عنه: على فاتورة (doc) أو من الرصيد القديم ('opening') — بعد البلاغات اللي لسه على الموبايل أو في الطريق
+  function collectLeft(c, target) {
+    const s = st(), known = new Set(s.collections.map(x => x.uid));
+    const base = target === 'opening' ? Number(c.opening_left || 0) : Number(((c.invoices || []).find(v => Number(v.id) === Number(target)) || {}).left || 0);
+    const same = p => Number(p.customer_id) === Number(c.id) && (target === 'opening' ? !!p.opening : Number(p.doc_id) === Number(target));
+    const waiting = [...outbox().filter(x => x.kind === 'collection' && x.state !== 'failed').map(x => x.payload),
+      ...(data.inbox || []).filter(i => i.kind === 'collection' && !i.error && !known.has(i.uid) && !outbox().some(x => x.uid === i.uid)).map(i => i.payload || {})];
+    let left = parseScaled(base.toFixed(2), 2);
+    for (const p of waiting) if (same(p)) left -= parseScaled(String(p.amount), 2) || 0n;
+    return left > 0n ? left : 0n;
+  }
+  function collectionForm(customerId, docId) {
     const s = st();
     const accounts = s.accounts || [];
-    const sh = openSheet('💵 بلاغ تحصيل', `<div class="note">بلّغ بالفلوس اللي حصّلتها. الخزنة بتأكد لما الفلوس توصل فعلًا، وساعتها بس مديونية العميل بتنزل.</div>
+    const sh = openSheet('💵 بلاغ تحصيل', `<div class="note">بلّغ بالفلوس اللي حصّلتها — على فاتورة (البضاعة بتخرج بفاتورة). الخزنة بتأكد لما الفلوس توصل فعلًا، وساعتها بس مديونية العميل بتنزل.</div>
       <label>العميل<select id="cfCustomer"><option value="">— اختار العميل —</option>${s.customers.map(c => `<option value="${c.id}"${Number(c.id) === Number(customerId) ? ' selected' : ''}>${esc(c.name)} — عليه ${esc(money(c.balance))}</option>`).join('')}</select></label>
+      <label id="cfDocBox" class="hidden">الفلوس دي على<select id="cfDoc"></select></label>
+      <div class="note warn hidden" id="cfNoDoc">مفيش فواتير عليها فلوس للعميل ده — التحصيل بيبقى على فاتورة.</div>
       <label>المبلغ (ج.م)<input id="cfAmount" inputmode="decimal" dir="ltr"></label>
+      <div class="hint" id="cfLeft"></div>
       <div class="seg" id="cfMethod"><button type="button" data-m="cash" class="on">نقدي (معايا)</button><button type="button" data-m="transfer">تحويل</button></div>
       <div id="cfTransfer" class="hidden">
         ${accounts.length ? `<label>حوّل على<select id="cfAccount"><option value="">— اختار الحساب —</option>${accounts.map(a => `<option value="${a.id}">${esc(a.name)} — ${esc(a.number || '')}</option>`).join('')}</select></label>` : '<div class="note warn">مفيش حسابات للتحويل متسجلة — كلّم المصنع.</div>'}
@@ -742,6 +865,26 @@
       <button type="button" class="good big" id="cfSend">📤 ابعت البلاغ</button>`);
     const b = sh.el;
     let method = 'cash', image = null;
+    // العميل اتغير ← فواتيره اللي عليها فلوس (الأقدم الأول) + الرصيد القديم لو فاضل منه
+    const paintDocs = keep => {
+      const c = customerById($('#cfCustomer', b).value);
+      const opts = !c ? [] : [...(c.invoices || []).map(v => ({ v: String(v.id), t: `فاتورة ${v.number} — باقي ${money(scaledToString(collectLeft(c, v.id), 2))}`, left: collectLeft(c, v.id) })),
+        ...(Number(c.opening_left) > 0 ? [{ v: 'opening', t: `رصيد قديم — باقي ${money(scaledToString(collectLeft(c, 'opening'), 2))}`, left: collectLeft(c, 'opening') }] : [])].filter(o => o.left > 0n);
+      $('#cfDocBox', b).classList.toggle('hidden', !c || !opts.length);
+      $('#cfNoDoc', b).classList.toggle('hidden', !c || !!opts.length);
+      $('#cfDoc', b).innerHTML = (opts.length > 1 ? '<option value="">— اختار الفاتورة —</option>' : '') + opts.map(o => `<option value="${o.v}">${esc(o.t)}</option>`).join('');
+      if (keep != null && opts.some(o => o.v === String(keep))) $('#cfDoc', b).value = String(keep);
+      paintLeft();
+    };
+    const paintLeft = () => {
+      const c = customerById($('#cfCustomer', b).value), t = $('#cfDoc', b).value;
+      const v = c && t && t !== 'opening' ? (c.invoices || []).find(x => String(x.id) === t) : null;
+      $('#cfLeft', b).textContent = !c || !t ? '' : t === 'opening' ? `الباقي من الرصيد القديم (ديون من قبل البرنامج): ${money(scaledToString(collectLeft(c, t), 2))}`
+        : `الباقي على الفاتورة: ${money(scaledToString(collectLeft(c, t), 2))}${v ? ` — فاتورة ${fmtDate(v.created_at)} بـ ${money(v.total)}` : ''}`;
+    };
+    $('#cfCustomer', b).onchange = () => paintDocs(null);
+    $('#cfDoc', b).onchange = paintLeft;
+    paintDocs(docId);
     $('#cfMethod', b).onclick = e => { const m = e.target.closest('[data-m]'); if (!m) return; method = m.dataset.m; $$('#cfMethod button', b).forEach(x => x.classList.toggle('on', x === m)); $('#cfTransfer', b).classList.toggle('hidden', method !== 'transfer'); };
     if ($('#cfPhoto', b)) $('#cfPhoto', b).onchange = async e => {
       const f = e.target.files && e.target.files[0]; image = null; $('#cfPrev', b).classList.add('hidden');
@@ -752,10 +895,13 @@
     $('#cfSend', b).onclick = async e => {
       const btn = e.currentTarget;
       const err = $('#cfErr', b); err.classList.add('hidden');
-      const cid = $('#cfCustomer', b).value, amt = parseScaled($('#cfAmount', b).value, 2);
+      const cid = $('#cfCustomer', b).value, amt = parseScaled($('#cfAmount', b).value, 2), target = $('#cfDoc', b).value;
       if (!cid) return showErr(err, 'اختار العميل');
+      if (!target) return showErr(err, $('#cfDocBox', b).classList.contains('hidden') ? 'مفيش فواتير عليها فلوس للعميل ده — التحصيل بيبقى على فاتورة' : 'اختار الفاتورة اللي الفلوس عليها');
       if (amt == null || amt <= 0n) return showErr(err, 'اكتب المبلغ (لحد قرشين)');
-      const payload = { customer_id: Number(cid), amount: scaledToString(amt, 2), method };
+      const left = collectLeft(customerById(cid), target);
+      if (amt > left) return showErr(err, `المبلغ أكبر من الباقي ${target === 'opening' ? 'من الرصيد القديم' : 'على الفاتورة'} (الباقي ${money(scaledToString(left, 2))})`);
+      const payload = { customer_id: Number(cid), amount: scaledToString(amt, 2), method, ...(target === 'opening' ? { opening: true } : { doc_id: Number(target) }) };
       if (method === 'transfer') {
         const acc = $('#cfAccount', b) ? $('#cfAccount', b).value : '';
         if (!acc) return showErr(err, 'اختار الحساب اللي العميل حوّل عليه');
@@ -765,7 +911,7 @@
       }
       const note = $('#cfNote', b).value.trim(); if (note) payload.note = note;
       const c = customerById(cid);
-      if (!await confirmSheet('ابعت البلاغ؟', `<div class="item"><b>${esc(c ? c.name : '')}</b><div class="item-sub">${moneyHtml(payload.amount)} — ${method === 'cash' ? 'نقدي معايا' : 'تحويل'}</div></div>`, '📤 ابعت', 'good')) return;
+      if (!await confirmSheet('ابعت البلاغ؟', `<div class="item"><b>${esc(c ? c.name : '')}</b><div class="item-sub">${moneyHtml(payload.amount)} — ${esc(colTarget(payload))} — ${method === 'cash' ? 'نقدي معايا' : 'تحويل'}</div></div>`, '📤 ابعت', 'good')) return;
       btn.disabled = true;
       try {
         const r = await queue('collection', payload);
@@ -821,16 +967,24 @@
     const phone = String(c.phone || '').replace(/[^0-9]/g, '');
     const wa = phone ? 'https://wa.me/' + (phone.startsWith('0') ? '2' + phone : phone) : '';
     const orders = orderCards().filter(o => o.customer === c.name).slice(0, 10), cols = collectionCards().filter(x => x.customer === c.name).slice(0, 10);
+    const invs = c.invoices || [];
     const sh = openSheet(c.name, `<div class="cards pair">
         <div class="card"><small>الرصيد</small><strong>${balanceHtml(c.balance)}</strong></div>
         <div class="card"><small>مبلّغ عنه ومستني الخزنة</small><strong>${moneyHtml(c.pending)}</strong></div></div>
       ${c.address ? `<div class="item-sub">📍 ${esc(c.address)}</div>` : ''}
       ${phone ? `<div class="actions"><a class="btn-link" href="tel:${esc(phone)}">📞 اتصال</a><a class="btn-link wa" href="${esc(wa)}" target="_blank" rel="noopener">واتساب</a></div>` : ''}
       <div class="actions"><button type="button" class="primary" data-act="order">➕ طلب للعميل ده</button><button type="button" class="good" data-act="col">💵 بلّغ عن تحصيل</button></div>
+      <h3>فواتير عليها فلوس</h3><div class="list">${invs.map(x => `<div class="item"><div class="item-head"><b>فاتورة ${esc(x.number)}</b><span class="chip bad">باقي ${esc(money(x.left))}</span></div>
+        <div class="item-sub">${esc(fmtDate(x.created_at))} — إجمالي ${moneyHtml(x.total)}</div>
+        <div class="actions"><button type="button" class="good" data-colinv="${x.id}">💵 حصّلت منها</button></div></div>`).join('')
+        || '<div class="empty">مفيش فواتير عليها فلوس</div>'}
+        ${Number(c.opening_left) > 0 ? `<div class="item"><div class="item-head"><b>رصيد قديم (من قبل البرنامج)</b><span class="chip bad">باقي ${esc(money(c.opening_left))}</span></div>
+          <div class="actions"><button type="button" class="good" data-colinv="opening">💵 حصّلت منه</button></div></div>` : ''}</div>
       <h3>طلباته</h3><div class="list">${orders.map(orderCardHtml).join('') || '<div class="empty">مفيش طلبات قريبة</div>'}</div>
       <h3>بلاغات التحصيل</h3><div class="list">${cols.map(collectionCardHtml).join('') || '<div class="empty">مفيش بلاغات</div>'}</div>`);
     $('[data-act="order"]', sh.el).onclick = () => { sh.close(); orderDraft = { customer: String(id), lines: [{}] }; tab = 'order'; render(); };
     $('[data-act="col"]', sh.el).onclick = () => { sh.close(); collectionForm(id); };
+    $$('[data-colinv]', sh.el).forEach(x => { x.onclick = () => { sh.close(); collectionForm(id, x.dataset.colinv); }; });
   }
 
   // ---------- الأسعار
