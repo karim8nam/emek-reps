@@ -16,6 +16,9 @@
   const moneyHtml = (n, cls = '') => `<span class="money ${cls}">${esc(money(n))}</span>`;
   const qty = n => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 3 });
   const tons = kg => qty(Number(kg || 0) / 1000) + ' طن';
+  // «الحصوة» لكل صنف (زي المصنع) — فاضي = بدون
+  const PEBBLES = ['ناعم', 'خشن', 'نص مللي', '1 مللي', '1.5 مللي', '2 مللي', '3 مللي'];
+  const pebbleOpts = sel => '<option value="">بدون</option>' + PEBBLES.map(p => `<option value="${p}"${p === sel ? ' selected' : ''}>${p}</option>`).join('');
   const fmtDate = t => t ? new Date(t).toLocaleDateString('ar-EG', { timeZone: 'Africa/Cairo', day: 'numeric', month: 'short' }) : '';
   const fmtDateTime = t => t ? new Date(t).toLocaleString('ar-EG', { timeZone: 'Africa/Cairo', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '';
   const ago = t => { const s = Math.max(0, (Date.now() - Date.parse(t)) / 1000); return s < 90 ? 'دلوقتي' : s < 3600 ? `من ${Math.round(s / 60)} دقيقة` : s < 86400 ? `من ${Math.round(s / 3600)} ساعة` : fmtDateTime(t); };
@@ -88,6 +91,7 @@
   // الخروج من الموبايل ده بس — المكتبة لوحدها بتخرّج كل أجهزة الحساب (scope=global)، والمندوب ممكن يبقى داخل من موبايلين
   const signOutHere = () => sb.auth.signOut({ scope: 'local' }).catch(() => {});
   function showLogin(msg) {
+    lockedNow = false; clearInterval(lockTimer); document.body.classList.remove('locked'); $('#lockScreen').classList.add('hidden');   // (🔒 لو كانت مقفولة)
     $('#appScreen').classList.add('hidden'); $('#loginScreen').classList.remove('hidden');
     if (msg) showErr($('#loginError'), msg);
   }
@@ -102,23 +106,102 @@
       try { await rpc('portal_me'); }
       catch (ex) { await signOutHere(); user = null; throw new Error(/مش حساب مندوب/.test(ex.message) ? 'الحساب ده مش حساب مندوب — صفحة المناديب للمناديب بس' : ex.message); }
       $('#loginPass').value = '';
-      await startApp();
+      await startApp(true);
     } catch (ex) { showErr(err, ex.message); }
     finally { btn.disabled = false; btn.textContent = 'دخول'; }
   });
   $('#logoutBtn').addEventListener('click', async () => {
     const waiting = outbox().filter(x => x.state !== 'failed').length;
     if (!await confirmSheet('خروج', waiting ? `<div class="note warn">فيه ${waiting} حاجة لسه متبعتتش — هتفضل على الموبايل وهتتبعت لما تدخل تاني.</div>` : 'تخرج من الصفحة؟', 'خروج', 'danger')) return;
-    clearInterval(refreshTimer);
+    clearInterval(refreshTimer); clearInterval(lockTimer);
     await signOutHere();
-    user = null; data = null;
+    user = null; data = null; pinSt = null;
     showLogin();
   });
 
-  async function startApp() {
+  // ---------- 🔒 باسورد الفتح (sql/029): الصفحة بتتقفل لوحدها لو فضلت X دقيقة من غير حركة، وأول ما تتفتح والحساب لسه داخل
+  // (مش بعد الدخول باسم الدخول والباسورد على طول). الفتح بيتراجع على السحابة (5 مرات غلط ← خروج) — ومن غير نت: ببصمة
+  // الباسورد اللي اتحفظت على الموبايل من آخر مرة كان فيه نت (عشان المندوب يقدر يسجّل طلب وهو في حتة مفيهاش نت).
+  let pinSt = null, lastAct = Date.now(), lockedNow = false, mustUnlock = false, lockTimer = null, pinAt = 0;
+  const pinOn = () => !!(pinSt && pinSt.has_pin);
+  for (const ev of ['touchstart', 'mousedown', 'keydown', 'scroll', 'wheel']) window.addEventListener(ev, () => { if (!lockedNow) lastAct = Date.now(); }, { passive: true, capture: true });
+  async function loadPin() {
+    try {
+      pinSt = await rpc('app_pin_state', { p_offline: true }); pinAt = Date.now();
+      try { localStorage.setItem(key('pin'), JSON.stringify(pinSt)); } catch (_) {}
+    } catch (e) { if (!e.network && /app_pin_state|Could not find/i.test(e.message)) pinSt = null; }   // (من غير نت: اللي على الموبايل — ولو ملف 029 لسه متشغّلش: مفيش قفل)
+    if (mustUnlock && pinOn() && !lockedNow) lockPage();
+    else if (!pinOn() && lockedNow) unlockPage();
+    if (!pinOn()) mustUnlock = false;
+    return pinSt;
+  }
+  function checkIdle() {
+    if (!user || lockedNow) return;
+    if (Date.now() - pinAt > 5 * 60e3 && document.visibilityState === 'visible') loadPin();
+    if (pinOn() && Date.now() - lastAct >= (Number(pinSt.minutes) || 10) * 60e3) lockPage();
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkIdle(); });
+  function lockPage() {
+    lockedNow = true;
+    document.body.classList.add('locked');
+    $('#lockWho').textContent = data && data.rep ? data.rep.name : '';
+    $('#lockError').classList.add('hidden'); $('#lockPin').value = '';
+    $('#lockScreen').classList.remove('hidden');
+    setTimeout(() => $('#lockPin').focus(), 30);
+  }
+  function unlockPage() {
+    lockedNow = false; mustUnlock = false; lastAct = Date.now();
+    document.body.classList.remove('locked');
+    $('#lockScreen').classList.add('hidden');
+  }
+  const sha256Hex = async s => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map(b => b.toString(16).padStart(2, '0')).join('');
+  // من غير نت: نفس القاعدة على الموبايل (5 مرات غلط ← خروج)
+  async function verifyOffline(pin) {
+    const s = readJson('pin', null);
+    if (!s || !s.salt || !s.hash || !(crypto && crypto.subtle)) return { ok: false, nonet: true };
+    const fails = Number(readJson('pinfail', 0)) || 0;
+    if (await sha256Hex(s.salt + ':' + pin) === s.hash) { try { localStorage.removeItem(key('pinfail')); } catch (_) {} return { ok: true }; }
+    if (fails + 1 >= 5) { try { localStorage.removeItem(key('pinfail')); } catch (_) {} return { ok: false, signout: true }; }
+    try { localStorage.setItem(key('pinfail'), JSON.stringify(fails + 1)); } catch (_) {}
+    return { ok: false, left: 5 - (fails + 1) };
+  }
+  async function lockedOut(msg) {
+    clearInterval(refreshTimer); clearInterval(lockTimer);
+    await signOutHere();
+    user = null; data = null; pinSt = null;
+    unlockPage();
+    showLogin(msg);
+  }
+  $('#lockPin').addEventListener('input', () => { $('#lockError').classList.add('hidden'); if (/^\d{6}$/.test(normDigits($('#lockPin').value))) $('#lockForm').requestSubmit(); });
+  $('#lockForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const err = $('#lockError'), btn = $('#lockBtn'), v = normDigits($('#lockPin').value);
+    const fail = m => { showErr(err, m); $('#lockPin').value = ''; $('#lockPin').focus(); };
+    if (!/^\d{6}$/.test(v)) return fail('باسورد الفتح 6 أرقام');
+    btn.disabled = true;
+    try {
+      let r;
+      try { r = await rpc('verify_app_pin', { p_pin: v }); try { localStorage.removeItem(key('pinfail')); } catch (_) {} }
+      catch (ex) { if (!ex.network) throw ex; r = await verifyOffline(v); }
+      if (r.ok) return unlockPage();
+      if (r.signout) return lockedOut('باسورد الفتح اتكتب غلط 5 مرات — ادخل باسم الدخول والباسورد تاني');
+      if (r.nonet) return fail('مفيش نت — وصل الموبايل بالنت مرة وجرّب تاني');
+      if (r.wait_until) return fail('محاولات غلط كتير — استنى 5 دقايق وجرّب تاني');
+      fail(`باسورد الفتح غلط — فاضل ${r.left} ${r.left === 1 ? 'محاولة' : 'محاولات'} وبعدها الصفحة هتخرج من الحساب`);
+    } catch (ex) { fail(ex.message); }
+    finally { btn.disabled = false; }
+  });
+  $('#lockLogout').addEventListener('click', () => lockedOut());
+
+  // fresh: لسه داخل باسم الدخول والباسورد (مفيش قفل دلوقتي)
+  async function startApp(fresh) {
     $('#loginScreen').classList.add('hidden'); $('#appScreen').classList.remove('hidden');
+    pinSt = readJson('pin', null); mustUnlock = !fresh; lastAct = Date.now();
+    if (mustUnlock && pinOn()) lockPage();                                // (من اللي على الموبايل على طول — قبل ما البيانات تبان)
+    clearInterval(lockTimer); lockTimer = setInterval(checkIdle, 15000);
     data = readJson('state', null);
     render();
+    loadPin();
     await loadState();
     sendOutbox();
     clearInterval(refreshTimer);
@@ -201,7 +284,7 @@
   // ---------- الطلبات: اللي على الموبايل + في الطريق + في المصنع + طلبات عملاؤه التانية
   // حالة التصنيع لكل صنف (لو اتعمله أمر تصنيع)
   const batchText = l => !l.batch ? '' : ` — 🏭 ${l.batch_status === 'done' ? 'اتصنع' : l.batch_status === 'cancelled' ? 'اتلغى أمر التصنيع' : 'بيتصنع'} (باتش ${l.batch})`;
-  const lineText = l => `${l.item || productName(l.product_id)} — ${l.unit === 'ton' ? tons(l.kg ?? l.quantity_kg) : `${qty(l.count)} ${l.type || l.package_type} × ${qty(l.weight)} كجم`}${l.code ? ' — ' + l.code : ''}${batchText(l)}`;
+  const lineText = l => `${l.item || productName(l.product_id)} — ${l.unit === 'ton' ? tons(l.kg ?? l.quantity_kg) : `${qty(l.count)} ${l.type || l.package_type} × ${qty(l.weight)} كجم`}${l.code ? ' — ' + l.code : ''}${l.pebble ? ' — حصوة ' + l.pebble : ''}${batchText(l)}`;
   function stageOf(g) {
     const live = g.filter(d => d.type === 'invoice' && !['cancelled', 'rejected'].includes(d.status)).pop() || g[g.length - 1];
     const ex = g.filter(d => d.exit_no).pop();                       // (آخر تسليم خرج — وأول ما المبيعات تعلّم «✅ اتسلّمت» بيبقى «وصل العميل»)
@@ -707,7 +790,8 @@
         <div data-box="ton"><label>الكمية (طن)<input data-f="tons" inputmode="decimal" dir="ltr" value="${esc(l.tons || '')}" placeholder="مثلًا 1.5"></label></div>
         <div data-box="package"><div class="row"><label>العبوة<select data-f="pk"></select></label><label class="narrow w-count">العدد<input data-f="count" inputmode="numeric" dir="ltr" value="${esc(l.count || '')}"></label></div>
           <div class="row hidden" data-other><label>نوع العبوة<input data-f="ptype" list="pkTypes" maxlength="30" value="${esc(l.ptype || '')}"></label><label>الوزن (كجم)<input data-f="weight" inputmode="decimal" dir="ltr" value="${esc(l.weight || '')}"></label></div></div>
-        <label>الكود / اللون (اختياري)<input data-f="code" maxlength="60" value="${esc(l.code || '')}"></label>
+        <div class="row"><label>الكود / اللون (اختياري)<input data-f="code" maxlength="60" value="${esc(l.code || '')}"></label>
+          <label class="narrow w-pebble">الحصوة<select data-f="pebble">${pebbleOpts(l.pebble || '')}</select></label></div>
         <div class="hint" data-hint></div>`;
       box.appendChild(div);
       paintLine(div);
@@ -719,8 +803,8 @@
     const readLine = div => {
       const p = prodOf(div), unit = div.dataset.unit;
       if (!p) return { bad: 'اختار الصنف' };
-      const code = $('[data-f=code]', div).value.trim();
-      const extra = { ...(code ? { code } : {}), ...(div.dataset.sline ? { sample_line_no: Number(div.dataset.sline) } : {}) };
+      const code = $('[data-f=code]', div).value.trim(), pebble = $('[data-f=pebble]', div).value;
+      const extra = { ...(code ? { code } : {}), ...(pebble ? { pebble } : {}), ...(div.dataset.sline ? { sample_line_no: Number(div.dataset.sline) } : {}) };
       if (unit === 'ton') {
         const t = parseScaled($('[data-f=tons]', div).value, 6);
         if (t == null || t <= 0n) return { bad: 'اكتب الكمية بالطن' };
@@ -767,7 +851,8 @@
     };
     const snapshot = () => ({ kind, tax: $('#ofTax', v).checked, customer: $('#ofCustomer', v).value, newName: $('#ofNewName', v).value, newPhone: $('#ofNewPhone', v).value, note: $('#ofNote', v).value, sample_id: d.sample_id || null,
       lines: $$('.oline', box).map(div => ({ product_id: $('[data-f=product]', div).value, unit: div.dataset.unit, tons: $('[data-f=tons]', div).value, pk: $('[data-f=pk]', div).value,
-        count: $('[data-f=count]', div).value, ptype: $('[data-f=ptype]', div).value, weight: $('[data-f=weight]', div).value, code: $('[data-f=code]', div).value, sline: div.dataset.sline || null })) });
+        count: $('[data-f=count]', div).value, ptype: $('[data-f=ptype]', div).value, weight: $('[data-f=weight]', div).value, code: $('[data-f=code]', div).value,
+        pebble: $('[data-f=pebble]', div).value, sline: div.dataset.sline || null })) });
     box.addEventListener('click', e => {
       const div = e.target.closest('.oline'); if (!div) return;
       const u = e.target.closest('[data-u]'); if (u) { div.dataset.unit = u.dataset.u; paintLine(div); recalc(); return; }

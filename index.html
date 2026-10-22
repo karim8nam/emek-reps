@@ -27,6 +27,19 @@
   </div>
 </div>
 
+<div id="lockScreen" class="screen lock-screen hidden">
+  <div class="login-box">
+    <div class="brand"><div class="mark">ا</div><div><h1>مناديب اميك</h1><p id="lockWho"></p></div></div>
+    <form id="lockForm" autocomplete="off">
+      <div class="note">🔒 الصفحة اتقفلت — اكتب باسورد الفتح بتاعك (6 أرقام). اللي كنت بتكتبه زي ما هو.</div>
+      <label>باسورد الفتح<input id="lockPin" class="pin" type="password" inputmode="numeric" dir="ltr" maxlength="6" autocomplete="off" spellcheck="false"></label>
+      <div id="lockError" class="error hidden"></div>
+      <button class="primary big" type="submit" id="lockBtn">🔓 فتح</button>
+      <button class="secondary" type="button" id="lockLogout">خروج من الحساب</button>
+    </form>
+  </div>
+</div>
+
 <div id="appScreen" class="screen hidden">
   <header class="top">
     <div class="who"><b id="repName"></b><small id="factoryLine"></small></div>

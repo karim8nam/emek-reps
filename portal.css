@@ -15,6 +15,12 @@ h3{font-size:15px;margin:16px 0 8px}
 /* ---------- الدخول */
 .screen{min-height:100vh}
 #loginScreen{display:grid;place-items:center;padding:20px 16px}
+/* قفل الصفحة (باسورد الفتح): فوق كل حاجة، واللي وراه بيستخبى زي ما هو */
+.lock-screen{position:fixed;inset:0;z-index:5000;background:var(--bg);display:grid;place-items:center;padding:20px 16px;overflow:auto}
+.lock-screen form{display:grid;gap:10px}
+.lock-screen label{margin-bottom:0}
+.lock-screen .pin{font-size:26px;letter-spacing:10px;text-align:center;font-family:Consolas,"Courier New",monospace}
+body.locked #appScreen,body.locked #sheetRoot,body.locked #toast{visibility:hidden}
 .login-box{width:100%;max-width:420px;background:var(--surface);border-radius:18px;box-shadow:var(--shadow);padding:22px 18px}
 .brand{display:flex;align-items:center;gap:12px;margin-bottom:18px}
 .brand h1{margin:0;font-size:21px}
@@ -44,6 +50,7 @@ button:disabled{opacity:.6}
 .actions.top0{margin:0 0 6px}
 .mt12{margin-top:12px}
 .w-count{width:96px}
+.w-pebble{width:120px}
 .btn-link{flex:1 1 120px;display:block;text-decoration:none;text-align:center;padding:11px;border-radius:11px;border:1px solid var(--line);background:#fff;color:var(--ink);font-weight:bold}
 .btn-link.wa{background:#16a34a;border-color:#16a34a;color:#fff}
 /* سطر فيه علامة (تشيك بوكس) وكلام */
