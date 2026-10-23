@@ -1,0 +1,107 @@
+/* دفتر الشركات — الورق المطبوع: بيان التصنيع والكشوف (.sheet)، وعرض السعر والفاتورة وإذن الخروج على خلفية الشركة (.doc-sheet).
+   نفس الورقة على الشاشة وفي الطباعة — ألوانها ثابتة عشان الطباعة. */
+
+/* ---------- بيان التصنيع والكشوف */
+.sheet-preview{background:var(--bg);border-radius:12px;padding:16px;overflow-x:auto}
+.sheet{position:relative;background:#fff;color:#111;width:100%;max-width:780px;margin:auto;padding:26px 28px;border:1px solid #d6dbe4;border-radius:6px;font-size:14px;line-height:1.6}
+.sheet-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:3px solid #14213d;padding-bottom:12px;margin-bottom:14px}
+.sheet-title{font-size:26px;font-weight:bold;color:#14213d}
+.sheet-sub{font-size:18px;font-weight:bold;margin-top:4px}
+.sheet-no{border:3px solid #14213d;border-radius:10px;padding:6px 18px;text-align:center;min-width:130px}
+.sheet-no small{display:block;color:#555;font-size:12px}
+.sheet-no b{display:block;font-size:30px;line-height:1.2;color:#14213d;white-space:nowrap}
+.sheet-info{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 14px;margin-bottom:14px}
+.sheet-info small{display:block;color:#666;font-size:11px}
+.sheet-info b{font-size:14px;overflow-wrap:anywhere}
+.sheet table{width:100%;border-collapse:collapse}
+.sheet th,.sheet td{border:1px solid #9aa3b2;padding:7px 9px;text-align:right;color:#111;background:#fff}
+.sheet th{background:#eef1f6;font-weight:bold;color:#14213d}
+/* (الورق ألوانه ثابتة: من غير «سطر بلون وسطر بلون» ولا تعليم الماوس والكيبورد بتوع الشاشة) */
+body .sheet tbody>tr:nth-child(n)>td{background:#fff;box-shadow:none}
+body .doc-sheet tbody>tr:nth-child(n)>td{background:transparent;box-shadow:none}
+.sheet td.num,.sheet th.num{text-align:left;white-space:nowrap}
+.sheet tfoot td{font-weight:bold;background:#eef1f6}
+.sheet-table td b{font-size:16px}
+.sheet .sheet-check{width:40px;text-align:center}
+/* عمود الملاحظات واسع: فيه ملاحظة التركيبة لو موجودة، ومكان الصالة تكتب الفرق بالقلم */
+.sheet .sheet-notes{width:30%;font-size:12px;color:#333}
+.sheet-note{margin-top:10px;padding:8px 10px;border:1px dashed #9aa3b2;border-radius:6px}
+.sheet-boxes{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.sheet-boxes h4{margin:0 0 6px;font-size:14px;color:#14213d}
+.sheet-blank td{height:30px}
+.sheet-sign{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:26px}
+.sheet-sign div{font-size:13px;color:#333}
+.sheet-sign span{display:block;border-bottom:1px solid #333;height:30px}
+.sheet-foot{margin-top:18px;font-size:11px;color:#777;text-align:left}
+.sheet-tag{display:inline-block;margin-top:6px;margin-left:6px;padding:3px 10px;border:1px solid #14213d;border-radius:20px;font-size:12px;font-weight:bold;color:#14213d}
+.sheet-tag-warn{border-color:#b45309;color:#b45309}
+.sheet-no .sheet-code{font-size:18px;margin-top:2px;max-width:220px;overflow-wrap:anywhere}
+.sheet-was{font-size:11px;color:#777;font-weight:normal}
+.sheet .sheet-notes b{font-size:13px}
+.sheet-removed td{color:#999}
+.sheet-watermark{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;overflow:hidden}
+.sheet-watermark span{font-size:120px;font-weight:bold;color:rgba(220,38,38,.18);transform:rotate(-18deg)}
+.sheet .payroll-table th,.sheet .payroll-table td,.sheet .report-table th,.sheet .report-table td{padding:5px 5px;font-size:11.5px}
+.sheet .payroll-table th,.sheet .report-table th{white-space:normal;line-height:1.3}
+.sheet .report-table{margin-bottom:12px}
+.sheet .report-table .badge{padding:1px 6px;font-size:10.5px}
+.sheet .payroll-table td:first-child{min-width:0}
+.sheet .payroll-table td b{font-size:12.5px}
+.sheet .sheet-sign-col{width:70px}
+
+/* ---------- عرض السعر / الفاتورة / إذن الخروج على خلفية الشركة (A4)
+   المسافات (من فوق ومن تحت ومن الجنب) جاية من «الإعدادات ← خلفيات الطباعة» كمتغيرات على الورقة نفسها */
+.doc-sheet{--top:26mm;--bottom:40mm;--side:13mm;position:relative;background:#fff;color:#111;width:100%;max-width:794px;min-height:1123px;margin:auto;font-size:14px;line-height:1.6;overflow:hidden}
+.doc-letterhead{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none;user-select:none}
+.doc-watermark{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;z-index:2;overflow:hidden}
+.doc-watermark span{font-size:88px;font-weight:bold;color:rgba(220,38,38,.16);transform:rotate(-20deg);white-space:nowrap}
+.doc-frame{position:relative;z-index:1;width:100%;border-collapse:collapse}
+.doc-frame>thead>tr>td,.doc-frame>tfoot>tr>td,.doc-frame>tbody>tr>td{border:0;padding:0;background:transparent}
+.doc-top-space{height:var(--top)}
+.doc-bottom-space{height:var(--bottom)}
+.doc-content{padding:0 var(--side)!important}
+.doc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:3px solid #14213d;padding-bottom:10px;margin-bottom:12px}
+.doc-title{font-size:28px;font-weight:bold;color:#14213d}
+.doc-sub{font-size:13px;color:#444;margin-top:2px}
+.doc-no{display:flex;gap:10px}
+.doc-no>div{border:2px solid #14213d;border-radius:8px;padding:4px 12px;text-align:center;background:rgba(255,255,255,.85)}
+.doc-no small{display:block;color:#555;font-size:11px}
+.doc-no b{font-size:17px;white-space:nowrap}
+.doc-parties{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:12px}
+.doc-parties>div{border:1px solid #c9ced8;border-radius:8px;padding:8px 12px;background:rgba(255,255,255,.85);font-size:13px}
+.doc-parties small{display:block;color:#666;font-size:11px}
+.doc-parties b{font-size:15px}
+.doc-sheet table.doc-table,.doc-sheet table.doc-totals{border-collapse:collapse;background:rgba(255,255,255,.88)}
+.doc-table{width:100%}
+.doc-table th,.doc-table td,.doc-totals td{border:1px solid #9aa3b2;padding:6px 8px;text-align:right;color:#111}
+.doc-table th{background:#eef1f6;color:#14213d}
+.doc-table td.num,.doc-table th.num,.doc-totals td.num{text-align:left;white-space:nowrap}
+.doc-table tfoot td{font-weight:bold;background:#eef1f6}
+.doc-per{font-size:11px;color:#666}
+.doc-bottom{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-top:12px}
+.doc-notes{flex:1;font-size:13px;line-height:1.8}
+.doc-totals{width:330px;flex:none}
+.doc-totals td:first-child{color:#333}
+.doc-grand-row td{font-weight:bold;font-size:16px;background:#eef1f6;color:#14213d!important}
+.doc-left-row td{font-weight:bold;color:#b91c1c!important}
+.doc-sign{display:grid;grid-template-columns:repeat(2,1fr);gap:40px;margin-top:28px;font-size:13px}
+.doc-sign.three{grid-template-columns:repeat(3,1fr)}
+.doc-sign span{display:block;border-bottom:1px solid #333;height:30px}
+.doc-foot{margin-top:14px;font-size:11px;color:#666;text-align:left}
+
+/* ---------- الطباعة نفسها */
+#printArea{display:none}
+@media print{
+  @page{size:A4;margin:10mm}
+  html,body{background:#fff!important}
+  body.printing>*:not(#printArea){display:none!important}
+  body.printing #printArea{display:block}
+  #printArea .sheet{border:0;max-width:none;padding:0;border-radius:0}
+  #printArea .sheet tr{break-inside:avoid}
+  /* المستندات: صفحة A4 من غير هوامش، والخلفية ثابتة على كل صفحة */
+  @page letter{size:A4;margin:0}
+  #printArea .doc-sheet{page:letter;max-width:none;min-height:0;overflow:visible}
+  #printArea .doc-letterhead{position:fixed;top:0;left:0;width:210mm;height:297mm;inset:auto}
+  #printArea .doc-watermark{position:fixed;top:0;left:0;width:210mm;height:297mm;inset:auto}
+  #printArea .doc-table tr{break-inside:avoid}
+}

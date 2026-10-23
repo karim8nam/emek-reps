@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://lrpdkdrenfagfhfdndlx.supabase.co; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#C2185B">
+<title>تصنيع اميك</title>
+<link rel="icon" href="icon.png">
+<!-- نفس شكل دفتر اميك بالظبط (ملفاته نفسها) + اللي خاص بالصفحة دي -->
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="components.css">
+<link rel="stylesheet" href="pages.css">
+<link rel="stylesheet" href="print.css">
+<link rel="stylesheet" href="responsive.css">
+<link rel="stylesheet" href="factory.css">
+</head>
+<body class="look-warm zebra">
+
+<div id="loginScreen" class="login hidden">
+  <div class="login-box">
+    <div class="brand"><div class="mark">ا</div><div><h1>تصنيع اميك</h1><p>صفحة التصنيع — ادخل بحساب المصنع اللي الإدارة بعتته</p></div></div>
+    <form id="loginForm" autocomplete="on">
+      <label>اسم الدخول<input id="loginUser" type="text" dir="ltr" autocomplete="username" autocapitalize="off" spellcheck="false" required></label>
+      <label>الباسورد<input id="loginPass" type="password" dir="ltr" autocomplete="current-password" required></label>
+      <div id="loginError" class="form-error hidden"></div>
+      <button class="primary" type="submit" id="loginBtn">دخول</button>
+    </form>
+  </div>
+</div>
+
+<div id="lockScreen" class="login lock-screen hidden">
+  <div class="login-box">
+    <div class="brand"><div class="mark">ا</div><div><h1>تصنيع اميك</h1><p id="lockWho"></p></div></div>
+    <form id="lockForm" autocomplete="off">
+      <div class="notice">🔒 الصفحة اتقفلت — اكتب باسورد الفتح (6 أرقام). اللي كنت شغال فيه زي ما هو.</div>
+      <label>باسورد الفتح<input id="lockPin" class="pin" type="password" inputmode="numeric" dir="ltr" maxlength="6" autocomplete="off" spellcheck="false"></label>
+      <div id="lockError" class="form-error hidden"></div>
+      <button class="primary" type="submit" id="lockBtn">🔓 فتح</button>
+    </form>
+    <div class="modal-actions" style="justify-content:center"><button class="secondary" id="lockLogout" type="button">خروج من الحساب</button></div>
+  </div>
+</div>
+
+<div id="appShell" class="shell hidden">
+  <header class="brand">
+    <div class="mark">ا</div>
+    <div><h1>تصنيع اميك</h1><p id="whoami"></p></div>
+    <div class="brand-status">
+      <span id="connStatus" class="conn"></span>
+      <button id="refreshBtn" class="secondary" type="button" title="تحديث من الإدارة">🔄 تحديث</button>
+      <button id="logoutBtn" class="secondary" type="button">خروج</button>
+    </div>
+  </header>
+  <div id="netBar" class="update-bar hidden" role="status"></div>
+  <nav id="nav">
+    <button type="button" data-tab="home" class="active">الرئيسية<span class="nav-count hidden" data-count="home"></span></button>
+    <button type="button" data-tab="orders">🏭 أوامر التصنيع<span class="nav-count hidden" data-count="orders"></span></button>
+    <button type="button" data-tab="run">✅ التنفيذ<span class="nav-count hidden" data-count="run"></span></button>
+    <button type="button" data-tab="formulas">🧪 التركيبات</button>
+    <button type="button" data-tab="store">🏬 مخزن المصنع<span class="nav-count hidden" data-count="store"></span></button>
+  </nav>
+  <main id="page"></main>
+</div>
+
+<div id="modalRoot"></div>
+<div id="printArea"></div>
+<div id="toast" class="toast hidden" role="status"></div>
+
+<script src="supabase.js"></script>
+<script src="config.js"></script>
+<script src="util.js"></script>
+<script src="factory-core.js"></script>
+<script src="factory-batches.js"></script>
+<script src="factory-formulas.js"></script>
+<script src="factory-store.js"></script>
+<script src="factory-boot.js"></script>
+</body>
+</html>

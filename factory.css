@@ -1,0 +1,7 @@
+/* صفحة التصنيع — نفس ملفات شكل دفتر اميك بالظبط (base/components/pages/print/responsive)، ودي الإضافات الصغيرة بس. */
+.chip .nav-count{margin-inline-start:4px}
+#netBar:empty{display:none}
+/* حالة الاتصال بالإدارة: سطر طويل — على الشاشة الصغيرة بينزل سطرين بدل ما يوسّع الصفحة */
+@media (max-width:760px){
+  .brand-status .conn{white-space:normal;flex-basis:100%;text-align:end}
+}

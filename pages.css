@@ -1,0 +1,87 @@
+/* دفتر الشركات — حاجات خاصة بصفحات معينة: الخزنة، السجل، التركيبات، المرتبات، فورم الفاتورة، الإعدادات، المتابعة، المناديب. */
+
+/* ---------- حسابات الخزنة: كل نوع عمود، والحسابات تحت بعض */
+.acc-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}
+.acc-col{min-width:0;display:grid;gap:12px}
+.acc-col .section-title{margin:0}
+.acc-col .empty{padding:14px;border:1px dashed var(--line);border-radius:12px}
+.acc-card .kind{font-size:12px;color:var(--muted)}
+.acc-card .acc-name{font-weight:bold;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acc-card .acc-sub{font-size:12px;color:var(--muted);margin-top:3px;direction:ltr;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acc-card.off{opacity:.55}
+.acc-card .acc-tools{margin-top:10px}
+
+/* ---------- سجل المراجعة */
+.diff{font-size:12px;color:var(--muted);line-height:1.8}
+.diff b{color:var(--ink);font-weight:normal}
+
+/* ---------- التركيبات */
+.summary.sum-ok{background:var(--good-bg)}.summary.sum-ok strong{color:var(--good)}
+.summary.sum-bad{background:var(--danger-bg)}.summary.sum-bad strong,.summary.sum-bad>span{color:var(--danger)}
+.batch-no{font-size:15px}
+.batch-cost{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:12px}
+
+/* ---------- كشف المرتبات: 9 أعمدة أرقام — أصغر شوية عشان ييجي على عرض A4 */
+.payroll-table td .muted{line-height:1.3}
+/* البصمة في شيت الحضور */
+.punch-cell{font-size:12.5px;min-width:170px}
+.punch-tags{font-size:12px;line-height:1.7;margin-top:2px}
+.punch-tags .badge{font-size:11px}
+.payroll-table td:first-child{min-width:120px}
+
+/* ---------- سطور الفاتورة في الفورم: كل صنف كارت صغير */
+.doc-line{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px;background:var(--soft)}
+.doc-line-row{display:grid;grid-template-columns:2fr 1.2fr 1fr 1.6fr 1fr auto;gap:8px;align-items:end}
+.doc-line-row.no-batch{grid-template-columns:2fr 1.4fr 1fr 1fr auto}
+.doc-line-q{grid-template-columns:repeat(5,minmax(0,1fr));margin-top:8px}
+.doc-line-x{align-self:end;height:38px}
+.doc-line-total{text-align:left;padding-bottom:8px;white-space:nowrap}
+.doc-line-total small{display:block;color:var(--muted);font-size:12px}
+.doc-line-hint{font-size:12px;margin-top:6px}
+.doc-line-hint:empty{display:none}
+.doc-form-totals{margin:14px 0 6px;border-radius:12px;background:var(--bg);padding:10px 16px}
+.doc-form-totals>div{display:flex;justify-content:space-between;padding:4px 0}
+.doc-form-totals .doc-disc{color:var(--danger)}
+.doc-form-totals .doc-grand{border-top:1px solid var(--line);margin-top:4px;padding-top:8px;font-size:18px}
+
+/* ---------- الإعدادات: قايمة الأقسام على الجنب، والقسم اللي مفتوح جنبها */
+.settings{display:grid;grid-template-columns:240px minmax(0,1fr);gap:16px;align-items:start}
+.settings-menu{position:sticky;top:76px;display:grid;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px;box-shadow:var(--shadow)}
+.settings-menu button{display:flex;align-items:flex-start;gap:10px;width:100%;text-align:right;border:0;background:transparent;color:var(--ink);padding:10px 12px;border-radius:9px;cursor:pointer;line-height:1.4}
+.settings-menu button:hover{background:var(--soft)}
+.settings-menu button.active{background:var(--nav-active);color:var(--nav-active-ink)}
+.settings-menu .ic{font-size:18px;line-height:1.2}
+.settings-menu small{display:block;font-size:11px;color:var(--muted);margin-top:2px}
+.settings-menu button.active small{color:inherit;opacity:.8}
+.settings-body{min-width:0}
+
+/* خلفيات الطباعة: لكل ورقة كارت فيه شكلها بالظبط (الخلفية والكلام فوقها) */
+.bg-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.bg-card{display:grid;gap:12px;align-content:start}
+.bg-card h3{margin:0;font-size:15px}
+.bg-card .form{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.bg-preview{position:relative;width:100%;aspect-ratio:210/297;overflow:hidden;border:1px solid var(--line);border-radius:10px;background:#fff}
+.bg-preview>.bg-zoom{position:absolute;top:0;right:0;width:794px;transform-origin:top right;pointer-events:none}
+.bg-tag{font-size:12px}
+
+/* حالة الطلب + رسالة الواتساب */
+.status-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:30px;font-size:12px;white-space:nowrap;background:var(--info-bg);color:var(--info)}
+.status-chip::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.status-chip.done{background:var(--good-bg);color:var(--good)}
+.order-box{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 12px;background:var(--soft)}
+.order-box .panel-head{margin-bottom:6px}
+.order-box h3{margin:0;font-size:15px}
+.tpl-tags{display:flex;flex-wrap:wrap;gap:6px}
+.tpl-tags button{border:1px dashed var(--line);background:var(--soft);color:var(--info);border-radius:16px;padding:3px 10px;font-size:12px;cursor:pointer}
+.tpl-tags button:hover{border-color:var(--hover-line)}
+.wa-preview{white-space:pre-wrap;overflow-wrap:anywhere;background:#e7fbe9;border:1px solid #c8eccc;border-radius:12px 12px 2px 12px;padding:10px 12px;font-size:13px;line-height:1.8;color:#14213d}
+
+/* المناديب */
+.rep-check{width:18px;height:18px;cursor:pointer}
+/* لينك صفحة المناديب واسم الدخول والباسورد: بالإنجليزي ومينفعش يتقطع غلط */
+.mono{font-family:Consolas,"Courier New",monospace;overflow-wrap:anywhere;direction:ltr;unicode-bidi:isolate}
+/* صورة التحويل اللي المندوب رفعها */
+.rc-img{display:block;max-width:100%;max-height:70vh;margin:8px auto 0;border:1px solid var(--line);border-radius:10px}
+
+/* قائمة الأسعار: سطر لكل عبوة في فورم التعديل */
+.price-row{grid-template-columns:1.4fr 1fr 1fr auto;margin-bottom:8px}

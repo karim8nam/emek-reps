@@ -1,0 +1,47 @@
+/* دفتر الشركات — الأساس: الألوان (كل لون معرّف هنا كمتغيّر)، والخط، وهيكل الصفحة والقايمة.
+   الملفات بالترتيب: base ← components ← pages ← print ← responsive (الأخير بيغلب). */
+:root{--ink:#14213d;--blue:#2563eb;--on-accent:#fff;--muted:#64748b;--line:#e2e8f0;--surface:#fff;--soft:#f8fafc;--bg:#f5f7fb;--good:#059669;--warn:#d97706;--danger:#dc2626;--input:#fff;--shadow:0 3px 12px rgba(15,23,42,.08);--shadow-lg:0 20px 60px rgba(15,23,42,.18);
+  --good-bg:#ecfdf5;--warn-bg:#fffbeb;--warn-ink:#92400e;--danger-bg:#fef2f2;--info-bg:#eff6ff;--info:#1d4ed8;--muted-bg:#f1f5f9;--credit:#6d28d9;--credit-bg:#f5f3ff;
+  /* (رأس الجدول، والملاحظات، والسطور بلونين، والسطر اللي عليه الماوس أو الكيبورد، وحدود الأزرار وانت معدّي عليها) */
+  --th-bg:var(--soft);--th-ink:var(--muted);--notice-bg:var(--info-bg);--notice-ink:var(--muted);--zebra:#f9fafc;--row-hover:#eef2f9;--row-sel:#e3e9f6;--hover-line:var(--blue);
+  --mark-bg:#14213d;--mark-shadow:inset 0 -5px 0 #f5b621;
+  /* (التاب المفتوح في القايمة فوق وفي الإعدادات: باللون الأساسي — في الرمادي الفاتح كحلي زي الأول) */
+  --nav-active:var(--blue);--nav-active-ink:var(--on-accent)}
+body.look-cool:not(.dark){--nav-active:#14213d;--nav-active-ink:#fff}
+
+/* ---------- 🎨 المظهر (07-look.js): كل مستخدم بيختار لنفسه — الافتراضي زي دفتر القديم بالظبط (كريمي وبمبي)
+   look-warm: الخلفية الكريمي والملاحظات الصفرا الفاتحة (ألوان الشعار). look-cool: الرمادي الفاتح (شكل دفتر الشركات الأولاني).
+   اللون الأساسي (--blue: الأزرار والتاب المفتوح) بيتحدد من 07-look.js، و--on-accent لون الكلام عليه (أبيض أو غامق). */
+body.look-warm{--bg:#FBF7F1;--soft:#FFF9EE;--line:#EEDFC6;--th-bg:#FDEFCF;--th-ink:#5A4520;--notice-bg:#FFF4DA;--notice-ink:#6B4C10;--zebra:#FFFBF3;--row-hover:#FFF1D6;--row-sel:#FDE7BE;--hover-line:#F0A030;
+  --mark-bg:linear-gradient(135deg,#F7C600 0%,#F08A1C 50%,#D6246E 100%);--mark-shadow:none}
+/* الوضع الغامق (للاتنين) */
+body.dark{--ink:#e7eaf1;--muted:#93a0b8;--line:#293349;--surface:#141b2c;--soft:#1b2439;--bg:#090e1a;--good:#34d399;--warn:#fbbf24;--danger:#f87171;--input:#0f1728;--shadow:0 3px 14px rgba(0,0,0,.4);--shadow-lg:0 24px 65px rgba(0,0,0,.6);
+  --good-bg:rgba(52,211,153,.14);--warn-bg:rgba(251,191,36,.14);--warn-ink:#fbbf24;--danger-bg:rgba(248,113,113,.14);--info-bg:rgba(96,165,250,.16);--info:#93c5fd;--muted-bg:rgba(148,163,184,.14);--credit:#c4b5fd;--credit-bg:rgba(167,139,250,.16);
+  --th-bg:var(--soft);--th-ink:var(--muted);--notice-bg:rgba(96,165,250,.13);--notice-ink:#b8c7e0;--zebra:rgba(255,255,255,.025);--row-hover:rgba(255,255,255,.06);--row-sel:rgba(255,255,255,.1)}
+body.dark.look-warm{--notice-bg:rgba(240,160,48,.13);--notice-ink:#F3C47E;--th-bg:#22283a;--th-ink:#e5c890;--hover-line:#F0A030}
+body.dark .modal-backdrop{background:rgba(0,0,0,.6)}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:Tahoma,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+.hidden{display:none!important}
+button{font:inherit}
+
+/* ---------- الهيكل */
+.shell{max-width:1240px;margin:auto;padding:22px 26px 40px}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+/* أيقونة البرنامج: بتتلوّن مع المظهر (الكريمي: ألوان الشعار زي دفتر القديم) */
+.mark{background:var(--mark-bg);color:#fff;width:42px;height:42px;display:grid;place-items:center;border-radius:12px;font-size:24px;font-weight:bold;flex:none;box-shadow:var(--mark-shadow)}
+.brand h1{margin:0;font-size:22px}
+.brand p{margin:3px 0 0;color:var(--muted);font-size:13px}
+.brand-status{margin-inline-start:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.conn{font-size:12px;color:var(--muted);white-space:nowrap}
+.conn.bad{color:var(--danger);font-weight:bold}
+nav#nav{display:flex;flex-wrap:wrap;gap:7px;margin:-8px 0 18px;padding:8px 0;position:sticky;top:0;z-index:30;background:var(--bg);box-shadow:0 6px 10px -10px rgba(15,23,42,.35)}
+nav#nav button{border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:10px 15px;border-radius:9px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+nav#nav button:hover{border-color:var(--hover-line)}
+nav#nav button.active{background:var(--nav-active);color:var(--nav-active-ink);border-color:var(--nav-active)}
+.update-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--info-bg);color:var(--info);border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:-6px 0 12px;font-size:13px}
+.progress{height:10px;background:var(--muted-bg);border-radius:20px;overflow:hidden}
+.progress>div{height:100%;width:0;background:var(--blue);transition:width .2s}
+.nav-count{background:var(--danger);color:#fff;border-radius:20px;font-size:11px;padding:1px 7px;line-height:1.5}

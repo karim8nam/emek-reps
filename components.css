@@ -1,0 +1,170 @@
+/* دفتر الشركات — المكونات المشتركة: الكروت والأقسام، الأزرار والحقول، الجداول، الحالات، الدخول، الإشعارات، النوافذ، الرسايل السريعة. */
+
+/* ---------- كروت وأقسام */
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.grid-2,.grid.grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.card,.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow);min-width:0}
+.card small{color:var(--muted);display:block}
+.card strong{display:block;font-size:24px;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card strong.title{font-size:18px;white-space:normal;overflow:visible;line-height:1.4}   /* (عنوان كارت كلام مش رقم: بينزل سطر بدل ما يتقص) */
+.card .mini{margin-top:6px;font-size:12px;color:var(--muted)}
+.card.clickable{cursor:pointer;transition:.15s}
+.card.clickable:hover{transform:translateY(-2px);border-color:var(--hover-line)}
+.panel{margin-bottom:16px}
+.grid+.panel,.grid+.grid,.panel+.grid{margin-top:16px}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.panel-head h2{margin:0;font-size:18px}
+.panel h2{margin:0 0 14px;font-size:18px}
+.panel h3{margin:18px 0 10px;font-size:15px}
+.section-title{margin:22px 0 10px;font-size:16px;display:flex;align-items:center;gap:8px}
+.notice{font-size:13px;color:var(--notice-ink);line-height:1.8;background:var(--notice-bg);border-radius:9px;padding:11px 13px;margin:10px 0}
+.notice.warn{background:var(--warn-bg);color:var(--warn-ink)}
+.notice.bad{background:var(--danger-bg);color:var(--danger)}
+.notice.good{background:var(--good-bg);color:var(--good)}
+.empty{padding:22px;color:var(--muted);text-align:center}
+.muted{color:var(--muted)}
+.tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* ---------- أزرار وحقول */
+label{display:grid;gap:6px;color:var(--muted);font-size:12px;min-width:0}
+input,select,textarea{font:inherit;border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:var(--input);color:var(--ink);min-width:0;width:100%}
+textarea{resize:vertical;min-height:64px}
+input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(--blue) 35%,transparent);border-color:var(--blue)}
+button.primary,button.secondary,button.danger,button.good{height:40px;padding:0 15px;border-radius:8px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+button.primary{background:var(--blue);color:var(--on-accent);border:0}
+button.good{background:var(--good);color:#fff;border:0}
+body.dark button.good{color:#062016}
+button.secondary{border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+button.secondary:hover{border-color:var(--hover-line)}
+button.danger{color:var(--danger);background:transparent;border:1px solid currentColor}
+button.danger:hover{background:rgba(220,38,38,.08)}
+button.small{height:32px;padding:0 11px;font-size:13px}
+button:disabled{opacity:.5;cursor:not-allowed}
+button.link{border:0;background:none;color:var(--blue);cursor:pointer;padding:0;font:inherit;text-decoration:underline}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:20px;padding:6px 13px;cursor:pointer;font-size:13px;white-space:nowrap}
+.chip.active{background:var(--blue);border-color:var(--blue);color:var(--on-accent)}
+.chip:not(.active):hover{border-color:var(--hover-line)}
+.form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.form .full{grid-column:1/-1}
+.check{display:flex;align-items:center;gap:8px;color:var(--ink);font-size:14px;cursor:pointer}
+.check input{width:auto}
+input.auto,select.auto{width:auto;max-width:100%}
+
+/* ---------- القوايم بصفحات (05-lists.js) */
+.list-filters{margin-bottom:12px}
+.list-filters select{max-width:min(240px,100%)}
+.list-hint{font-size:13px;margin-top:10px}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px;font-size:13px;color:var(--muted)}
+.pager .tools{gap:6px}
+.loading{opacity:.55;transition:opacity .15s;pointer-events:none}
+
+/* ---------- جداول */
+.table-wrap{overflow-x:auto;max-width:100%}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{text-align:right;color:var(--th-ink);font-weight:normal;background:var(--th-bg);white-space:nowrap}
+th,td{padding:10px 11px;border-bottom:1px solid var(--line);vertical-align:middle}
+/* الجداول الطويلة: سطر بلون وسطر بلون (🎨 المظهر)، والسطر اللي عليه الماوس، والسطر اللي متعلّم بالكيبورد (06-keys.js) — على الشاشة بس (الورق المطبوع ليه ألوانه في print.css) */
+@media screen{
+  body.zebra tbody>tr:nth-child(even)>td{background:var(--zebra)}
+  tbody>tr:hover>td{background:var(--row-hover)}
+  tbody>tr.kb-sel>td{background:var(--row-sel)}
+  tbody>tr.kb-sel>td:first-child{box-shadow:inset -3px 0 0 var(--blue)}
+}
+tr.row-click{cursor:pointer}
+td.num,th.num{text-align:left;white-space:nowrap}
+td.nowrap{white-space:nowrap}
+td>button{margin:2px}
+/* زي دفتر: الرقم وبعده «ج.م» من اليمين للشمال (150,000.00 ج.م) */
+.money{white-space:nowrap;direction:rtl;unicode-bidi:isolate;display:inline-block}
+.in{color:var(--good)}.out{color:var(--danger)}
+tfoot td{font-weight:bold;background:var(--soft)}
+
+/* ---------- حالات */
+.badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:30px;font-size:12px;white-space:nowrap;background:var(--muted-bg);color:var(--muted)}
+.st-pending{background:var(--warn-bg);color:var(--warn-ink)}
+.st-approved{background:var(--info-bg);color:var(--info)}
+.st-paid{background:var(--good-bg);color:var(--good)}
+.st-rejected{background:var(--danger-bg);color:var(--danger)}
+.st-credit{background:var(--credit-bg);color:var(--credit)}
+.st-cancelled{background:var(--muted-bg);color:var(--muted);text-decoration:line-through}
+.role-chip{display:inline-block;background:var(--info-bg);color:var(--info);border-radius:20px;padding:2px 9px;font-size:12px;margin:2px;white-space:nowrap}
+
+/* ---------- الدخول */
+.login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.login-box{width:min(420px,100%);background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:26px;box-shadow:var(--shadow-lg)}
+.login-box .brand{margin-bottom:8px}
+.conn-line{margin-top:14px;font-size:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;text-align:center}
+.login-box form{display:grid;gap:12px;margin-top:16px}
+.login-box button.primary{width:100%}
+/* قفل البرنامج (باسورد الفتح): فوق كل حاجة، واللي وراه بيستخبى زي ما هو (الفورم اللي بيتكتب ميضيعش) */
+.lock-screen{position:fixed;inset:0;z-index:5000;background:var(--bg);overflow:auto}
+.lock-screen .pin{font-size:26px;letter-spacing:10px;text-align:center;font-family:Consolas,"Courier New",monospace}
+body.locked #appShell,body.locked #modalRoot,body.locked #notifPanel,body.locked #toast,body.locked #printArea{visibility:hidden}
+.form-error{color:var(--danger);background:var(--danger-bg);border-radius:9px;padding:10px;font-size:13px;line-height:1.7}
+
+/* ---------- الإشعارات */
+.bell{position:relative;width:42px;height:40px;border:1px solid var(--line);background:var(--surface);border-radius:9px;cursor:pointer;font-size:18px;display:grid;place-items:center}
+.bell:hover{border-color:var(--hover-line)}
+.bell-count{position:absolute;top:-6px;left:-6px;background:var(--danger);color:#fff;border-radius:20px;font-size:11px;min-width:20px;height:20px;padding:0 5px;display:grid;place-items:center;font-weight:bold}
+.notif-panel{position:fixed;top:72px;left:24px;width:min(400px,calc(100vw - 32px));max-height:min(560px,calc(100vh - 100px));display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-lg);z-index:2000}
+.notif-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line)}
+.notif-head strong{font-size:15px}
+.notif-list{overflow-y:auto}
+.notif{display:block;width:100%;text-align:right;border:0;border-bottom:1px solid var(--line);background:transparent;padding:11px 14px;cursor:pointer;color:var(--ink)}
+.notif:hover{background:var(--soft)}
+.notif.unread{background:var(--info-bg)}
+.notif .t{font-weight:bold;font-size:13px;line-height:1.6}
+.notif .b{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.6}
+.notif .w{font-size:11px;color:var(--muted);margin-top:4px}
+
+/* ---------- نوافذ */
+.modal{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.45)}
+.modal-card{position:relative;width:min(640px,100%);max-height:calc(100vh - 40px);overflow-y:auto;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:var(--shadow-lg)}
+.modal-card.wide{width:min(900px,100%)}
+.modal-title{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:16px}
+.modal-title small{color:var(--muted)}
+.modal-title h3{margin:4px 0 0;font-size:20px}
+.modal-close{border:0;background:transparent;font-size:28px;cursor:pointer;color:var(--muted);line-height:1}
+.modal-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+.summary{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 16px;border-radius:12px;background:var(--bg);margin:14px 0}
+.summary>span{color:var(--muted)}
+.summary strong{font-size:22px}
+.kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 18px;margin-bottom:6px}
+.kv div{min-width:0}
+.kv small{display:block;color:var(--muted);font-size:12px;margin-bottom:3px}
+.kv>div>span{overflow-wrap:anywhere}
+.timeline{list-style:none;margin:6px 0 0;padding:0}
+.timeline li{padding:7px 0;border-bottom:1px dashed var(--line);font-size:13px;line-height:1.7}
+.timeline li:last-child{border-bottom:0}
+.timeline b{color:var(--ink)}
+.lines-edit td{padding:6px}
+.lines-edit input{padding:7px 8px}
+.lines-edit .col-qty,.lines-edit .col-unit{width:110px}
+.lines-edit .col-price{width:130px}
+.lines-edit .col-total{width:140px}
+.lines-edit .col-x{width:44px}
+.lines-edit .col-mat{width:30%}
+.lines-edit .col-pct{width:80px}
+.lines-edit .col-cont{width:36%;min-width:200px}
+
+/* ---------- 🎨 المظهر والاختصارات (07-look.js، 06-keys.js) */
+.look h3{margin:16px 0 8px;font-size:15px}
+.look h3:first-child{margin-top:0}
+.swatches{display:flex;flex-wrap:wrap;gap:8px}
+.swatch{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:20px;padding:5px 12px 5px 9px;cursor:pointer;font-size:13px;white-space:nowrap;min-height:34px}
+.swatch>span{width:18px;height:18px;border-radius:50%;background:var(--c);box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);flex:none}
+body.dark .swatch>span{box-shadow:0 0 0 1px rgba(255,255,255,.4)}      /* (الكحلي يبان على الغامق) */
+.swatch.active{border-color:var(--blue);box-shadow:0 0 0 2px color-mix(in srgb,var(--blue) 30%,transparent);font-weight:bold}
+.swatch.custom{display:inline-flex;grid-template-columns:none;color:var(--ink);font-size:13px}
+.swatch.custom input{width:34px;height:24px;padding:0;border:0;background:none;cursor:pointer}
+kbd{display:inline-block;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:1px 7px;font-family:Consolas,"Courier New",monospace;font-size:12px;background:var(--soft);color:var(--ink);direction:ltr;unicode-bidi:isolate;white-space:nowrap}
+.keys-list td{padding:7px 10px}
+.keys-list td:first-child{width:1%}
+
+/* ---------- رسائل سريعة */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:10px;z-index:4000;box-shadow:var(--shadow-lg);max-width:min(560px,calc(100vw - 32px));line-height:1.7}
+.toast.bad{background:var(--danger)}
+.toast.good{background:var(--good)}
