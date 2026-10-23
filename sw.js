@@ -2,7 +2,7 @@
 // دايمًا بيجيب من النت الأول (عشان أي تحديث للصفحة يوصل على طول)، ولو مفيش نت بيفتح المحفوظ.
 // (اتصالات Supabase نفسها مش بتعدي من هنا — دي صفحات الموقع بس.)
 // (صفحة التصنيع factory.html وملفاتها factory-*: لو مش محفوظة متفتحش صفحة المناديب مكانها)
-const CACHE = 'emek-portal-0.30.0';
+const CACHE = 'emek-portal-0.31.0';
 self.addEventListener('install', e => { self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(self.clients.claim()); });
 self.addEventListener('fetch', e => {
