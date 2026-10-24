@@ -85,3 +85,34 @@
 
 /* قائمة الأسعار: سطر لكل عبوة في فورم التعديل */
 .price-row{grid-template-columns:1.4fr 1fr 1fr auto;margin-bottom:8px}
+
+/* 📈 المبيعات ومجمل الربح (48-charts.js): لونين متجربين لعمى الألوان على الفاتح والغامق — والكلام بألوان الكلام مش ألوان الرسمة */
+:root{--series-1:#2a78d6;--series-2:#eb6834}
+body.dark{--series-1:#3987e5;--series-2:#d95926}
+.trend-panel{margin-top:16px}
+.trend-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.trend-legend span{display:inline-flex;align-items:center;gap:6px}
+.key-bar{display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--series-1)}
+.key-line{display:inline-block;width:16px;height:2px;border-radius:1px;background:var(--series-2)}
+.key-none{display:inline-block;width:16px}
+.trend-wrap{position:relative;overflow-x:auto;overflow-y:hidden}
+.trend-svg{display:block}
+.tc-bar{fill:var(--series-1)}
+.tc-line{fill:none;stroke:var(--series-2);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.tc-dot{fill:var(--series-2);stroke:var(--surface);stroke-width:2}
+.tc-grid{stroke:var(--line);stroke-width:1}
+.tc-grid.tc-zero{stroke:var(--muted);stroke-opacity:.45}
+.tc-x,.tc-y{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+.tc-year{font-size:10px}
+.tc-cross{stroke:var(--muted);stroke-width:1;stroke-opacity:.6}
+.tc-hit{fill:transparent;outline:none}
+.tc-hit:focus{fill:var(--soft);fill-opacity:.45}
+.tc-tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:8px 10px;font-size:13px;min-width:180px;z-index:2}
+.tc-tip-head{font-weight:bold;margin-bottom:4px;color:var(--ink)}
+.tc-tip-row{display:flex;align-items:center;gap:8px;white-space:nowrap;line-height:1.8}
+.tc-tip-row b{color:var(--ink)}
+.tc-tip-row span{color:var(--muted)}
+.trend-table{margin-top:8px}
+.trend-table summary{cursor:pointer;color:var(--muted);font-size:13px;padding:4px 0}
+/* 🔎 دوّر في كل حاجة: عنوان كل نوع */
+.gs-table .gs-group th{text-align:right;font-size:13px}

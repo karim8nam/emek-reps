@@ -657,19 +657,28 @@
 
   // ---------- بلاغات التحصيل
   const COL_STATE = { pending: ['مستني تأكيد الخزنة', 'warn'], confirmed: ['اتأكد', 'good'], rejected: ['مش واصل', 'bad'] };
+  // (sql/039) الشيك: مع المندوب لحد ما الخزنة تستلمه ← تحت التحصيل ← اتصرف / ارتد / اترجع
+  const CHEQUE_STAGE = { pending: ['🧾 في الخزنة — تحت التحصيل', 'good'], cleared: ['✅ الشيك اتصرف', 'good'], bounced: ['⚠️ الشيك ارتد', 'bad'], returned: ['الشيك اترجع للعميل', 'gray'] };
+  const colStage = c => c.status === 'confirmed' && c.reversed ? ['اتلغى التوريد (تصحيح من المصنع)', 'bad']
+    : c.method === 'cheque' && c.status === 'pending' ? ['مستني الخزنة تستلم الشيك', 'warn']
+    : c.method === 'cheque' && c.status === 'confirmed' ? CHEQUE_STAGE[c.cheque_status] || COL_STATE.confirmed
+    : COL_STATE[c.status] || [c.status, ''];
+  const colMethod = c => c.method === 'cash' ? 'نقدي معايا' : c.method === 'cheque' ? `شيك${c.cheque_no ? ' رقم ' + c.cheque_no : ''}${c.cheque_bank ? ' — ' + c.cheque_bank : ''}${c.cheque_due ? ' — ميعاده ' + fmtDate(c.cheque_due) : ''}`
+    : 'تحويل' + (c.account ? ' على «' + c.account + '»' : '');
   function collectionCards() {
     const s = st(); if (!s) return [];
     const out = outbox().filter(x => x.kind === 'collection'), known = new Set(s.collections.map(c => c.uid));
     const inbox = (data.inbox || []).filter(i => i.kind === 'collection' && !known.has(i.uid) && !out.some(x => x.uid === i.uid));
     const acc = id => (s.accounts.find(a => Number(a.id) === Number(id)) || {}).name;
+    const chq = p => ({ cheque_no: p.cheque_no, cheque_bank: p.cheque_bank, cheque_due: p.cheque_due });
     return [
-      ...out.map(o => ({ at: o.created_at, customer: (customerById(o.payload.customer_id) || {}).name, amount: o.payload.amount, method: o.payload.method, account: acc(o.payload.account_id),
+      ...out.map(o => ({ at: o.created_at, customer: (customerById(o.payload.customer_id) || {}).name, amount: o.payload.amount, method: o.payload.method, account: acc(o.payload.account_id), ...chq(o.payload),
         target: colTarget(o.payload), stage: o.state === 'failed' ? ['مقبلش: ' + o.error, 'bad'] : ['على الموبايل — لسه متبعتش', 'gray'], out: o })),
-      ...inbox.map(i => ({ at: i.created_at, customer: (customerById(i.payload.customer_id) || {}).name, amount: i.payload.amount, method: i.payload.method, account: acc(i.payload.account_id),
+      ...inbox.map(i => ({ at: i.created_at, customer: (customerById(i.payload.customer_id) || {}).name, amount: i.payload.amount, method: i.payload.method, account: acc(i.payload.account_id), ...chq(i.payload || {}),
         target: colTarget(i.payload), stage: i.error ? ['مقبلش: ' + i.error, 'bad'] : ['اتبعت — مستني المصنع يستلمه', 'gray'] })),
-      ...s.collections.map(c => ({ at: c.created_at, customer: c.customer, amount: c.amount, method: c.method, account: c.account,
+      ...s.collections.map(c => ({ at: c.created_at, customer: c.customer, amount: c.amount, method: c.method, account: c.account, ...chq(c),
         target: c.on_opening && !c.doc_number ? 'رصيد قديم' : c.doc_number ? 'فاتورة ' + c.doc_number : '',
-        stage: c.status === 'confirmed' && c.reversed ? ['اتلغى التوريد (تصحيح من المصنع)', 'bad'] : COL_STATE[c.status] || [c.status, ''],
+        stage: colStage(c),
         extra: c.status === 'confirmed' && Number(c.confirmed_amount) !== Number(c.amount) ? 'وصل ' + money(c.confirmed_amount) : c.status === 'rejected' ? c.note : c.status === 'confirmed' && c.note ? c.note : '' })),
     ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   }
@@ -682,7 +691,7 @@
     return v ? 'فاتورة ' + v.number : 'فاتورة';
   };
   const collectionCardHtml = c => `<div class="item"><div class="item-head"><b>${esc(c.customer || '—')}</b><span class="chip ${c.stage[1]}">${esc(c.stage[0])}</span></div>
-    <div class="item-sub">${moneyHtml(normDigits(c.amount))}${c.target ? ' — ' + esc(c.target) : ''} — ${c.method === 'cash' ? 'نقدي معايا' : 'تحويل' + (c.account ? ' على «' + esc(c.account) + '»' : '')} — ${esc(fmtDateTime(c.at))}</div>
+    <div class="item-sub">${moneyHtml(normDigits(c.amount))}${c.target ? ' — ' + esc(c.target) : ''} — ${esc(colMethod(c))} — ${esc(fmtDateTime(c.at))}</div>
     ${c.extra ? `<div class="item-sub">${esc(c.extra)}</div>` : ''}
     ${c.out && c.out.state === 'failed' ? `<div class="actions"><button type="button" class="danger" data-drop="${esc(c.out.uid)}">امسحه</button></div>` : ''}</div>`;
   // النقدي اللي معايا ولسه متسلمش (عهدة)
@@ -938,12 +947,21 @@
       <div class="note warn hidden" id="cfNoDoc">مفيش فواتير عليها فلوس للعميل ده — التحصيل بيبقى على فاتورة.</div>
       <label>المبلغ (ج.م)<input id="cfAmount" inputmode="decimal" dir="ltr"></label>
       <div class="hint" id="cfLeft"></div>
-      <div class="seg" id="cfMethod"><button type="button" data-m="cash" class="on">نقدي (معايا)</button><button type="button" data-m="transfer">تحويل</button></div>
+      <div class="seg" id="cfMethod"><button type="button" data-m="cash" class="on">نقدي (معايا)</button><button type="button" data-m="transfer">تحويل</button><button type="button" data-m="cheque">شيك</button></div>
       <div id="cfTransfer" class="hidden">
         ${accounts.length ? `<label>حوّل على<select id="cfAccount"><option value="">— اختار الحساب —</option>${accounts.map(a => `<option value="${a.id}">${esc(a.name)} — ${esc(a.number || '')}</option>`).join('')}</select></label>` : '<div class="note warn">مفيش حسابات للتحويل متسجلة — كلّم المصنع.</div>'}
         <label>رقم العملية (اختياري)<input id="cfRef" dir="ltr" maxlength="100"></label>
-        <label>صورة التحويل (اختياري)<input id="cfPhoto" type="file" accept="image/*"></label>
-        <img id="cfPrev" class="photo-prev hidden" alt="صورة التحويل">
+      </div>
+      <div id="cfCheque" class="hidden">
+        <div class="note">الشيك بيفضل معاك لحد ما تسلّمه للخزنة، ومبيخصمش من مديونية العميل غير لما يتصرف.</div>
+        <label>رقم الشيك<input id="cfChqNo" dir="ltr" maxlength="40"></label>
+        <label>البنك<input id="cfChqBank" list="cfBanks" maxlength="80"></label>
+        <datalist id="cfBanks">${['البنك الأهلي المصري', 'بنك مصر', 'بنك القاهرة', 'البنك التجاري الدولي CIB', 'بنك QNB الأهلي', 'بنك الإسكندرية', 'البنك الزراعي المصري', 'بنك فيصل الإسلامي'].map(x => `<option value="${x}"></option>`).join('')}</datalist>
+        <label>ميعاد الشيك (تاريخ الاستحقاق)<input id="cfChqDue" type="date"></label>
+      </div>
+      <div id="cfPhotoBox" class="hidden">
+        <label id="cfPhotoLabel">صورة التحويل (اختياري)<input id="cfPhoto" type="file" accept="image/*"></label>
+        <img id="cfPrev" class="photo-prev hidden" alt="الصورة">
       </div>
       <label>ملاحظة (اختياري)<input id="cfNote" maxlength="300"></label>
       <div class="error hidden" id="cfErr"></div>
@@ -970,7 +988,14 @@
     $('#cfCustomer', b).onchange = () => paintDocs(null);
     $('#cfDoc', b).onchange = paintLeft;
     paintDocs(docId);
-    $('#cfMethod', b).onclick = e => { const m = e.target.closest('[data-m]'); if (!m) return; method = m.dataset.m; $$('#cfMethod button', b).forEach(x => x.classList.toggle('on', x === m)); $('#cfTransfer', b).classList.toggle('hidden', method !== 'transfer'); };
+    $('#cfMethod', b).onclick = e => {
+      const m = e.target.closest('[data-m]'); if (!m) return; method = m.dataset.m;
+      $$('#cfMethod button', b).forEach(x => x.classList.toggle('on', x === m));
+      $('#cfTransfer', b).classList.toggle('hidden', method !== 'transfer');
+      $('#cfCheque', b).classList.toggle('hidden', method !== 'cheque');
+      $('#cfPhotoBox', b).classList.toggle('hidden', method === 'cash');
+      $('#cfPhotoLabel', b).firstChild.textContent = method === 'cheque' ? 'صورة الشيك (اختياري)' : 'صورة التحويل (اختياري)';
+    };
     if ($('#cfPhoto', b)) $('#cfPhoto', b).onchange = async e => {
       const f = e.target.files && e.target.files[0]; image = null; $('#cfPrev', b).classList.add('hidden');
       if (!f) return;
@@ -994,9 +1019,17 @@
         const ref = $('#cfRef', b).value.trim(); if (ref) payload.reference = ref;
         if (image) payload.image = image;
       }
+      if (method === 'cheque') {
+        const no = $('#cfChqNo', b).value.trim(), bank = $('#cfChqBank', b).value.trim(), due = $('#cfChqDue', b).value;
+        if (!no) return showErr(err, 'اكتب رقم الشيك');
+        if (bank.length < 2) return showErr(err, 'اكتب اسم البنك');
+        if (!due) return showErr(err, 'اختار ميعاد الشيك');
+        Object.assign(payload, { cheque_no: no, cheque_bank: bank, cheque_due: due });
+        if (image) payload.image = image;
+      }
       const note = $('#cfNote', b).value.trim(); if (note) payload.note = note;
       const c = customerById(cid);
-      if (!await confirmSheet('ابعت البلاغ؟', `<div class="item"><b>${esc(c ? c.name : '')}</b><div class="item-sub">${moneyHtml(payload.amount)} — ${esc(colTarget(payload))} — ${method === 'cash' ? 'نقدي معايا' : 'تحويل'}</div></div>`, '📤 ابعت', 'good')) return;
+      if (!await confirmSheet('ابعت البلاغ؟', `<div class="item"><b>${esc(c ? c.name : '')}</b><div class="item-sub">${moneyHtml(payload.amount)} — ${esc(colTarget(payload))} — ${esc(colMethod({ method, ...payload }))}</div></div>`, '📤 ابعت', 'good')) return;
       btn.disabled = true;
       try {
         const r = await queue('collection', payload);
@@ -1040,7 +1073,8 @@
       const q = $('#cuSearch', v).value.trim().toLowerCase();
       const list = s.customers.filter(c => !q || c.name.toLowerCase().includes(q));
       $('#cuList', v).innerHTML = list.map(c => `<button type="button" class="item" data-cu="${c.id}"><div class="item-head"><b>${esc(c.name)}</b>${balanceHtml(c.balance)}</div>
-        ${Number(c.pending) ? `<div class="item-sub">⏳ مبلّغ عنه ومستني الخزنة: ${moneyHtml(c.pending)}</div>` : ''}</button>`).join('') || '<div class="empty">مفيش عملاء</div>';
+        ${Number(c.pending) ? `<div class="item-sub">⏳ مبلّغ عنه ومستني الخزنة: ${moneyHtml(c.pending)}</div>` : ''}
+        ${Number(c.cheques) ? `<div class="item-sub">🧾 شيكات تحت التحصيل (لسه متصرفتش): ${moneyHtml(c.cheques)}</div>` : ''}</button>`).join('') || '<div class="empty">مفيش عملاء</div>';
     };
     paint();
     $('#cuSearch', v).addEventListener('input', paint);
@@ -1056,7 +1090,8 @@
     const sh = openSheet(c.name, `<div class="cards pair">
         <div class="card"><small>الرصيد</small><strong>${balanceHtml(c.balance)}</strong></div>
         <div class="card"><small>مبلّغ عنه ومستني الخزنة</small><strong>${moneyHtml(c.pending)}</strong></div></div>
-      ${c.address ? `<div class="item-sub">📍 ${esc(c.address)}</div>` : ''}
+      ${Number(c.cheques) ? `<div class="note">🧾 شيكات تحت التحصيل ${moneyHtml(c.cheques)} — الرصيد بيقل لما تتصرف.</div>` : ''}
+      ${c.address ?`<div class="item-sub">📍 ${esc(c.address)}</div>` : ''}
       ${phone ? `<div class="actions"><a class="btn-link" href="tel:${esc(phone)}">📞 اتصال</a><a class="btn-link wa" href="${esc(wa)}" target="_blank" rel="noopener">واتساب</a></div>` : ''}
       <div class="actions"><button type="button" class="primary" data-act="order">➕ طلب للعميل ده</button><button type="button" class="good" data-act="col">💵 بلّغ عن تحصيل</button></div>
       <h3>فواتير عليها فلوس</h3><div class="list">${invs.map(x => `<div class="item"><div class="item-head"><b>فاتورة ${esc(x.number)}</b><span class="chip bad">باقي ${esc(money(x.left))}</span></div>
