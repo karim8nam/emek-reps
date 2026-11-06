@@ -89,6 +89,30 @@ body .doc-sheet tbody>tr:nth-child(n)>td{background:transparent;box-shadow:none}
 .doc-sign span{display:block;border-bottom:1px solid #333;height:30px}
 .doc-foot{margin-top:14px;font-size:11px;color:#666;text-align:left}
 
+/* (sql/047) الورقة بأجزاء بتترتب: الجزء اللي بعرض الورقة لوحده (.pl-one)، واللي أصغر في صف من 6 أعمدة (.pl-row) — تلت 2، نص 3، تلتين 4 */
+.pl-row{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));column-gap:14px;align-items:stretch}
+.pl-b>.pl-party{height:100%;box-sizing:border-box}
+.pl-row,.pl-one{margin-bottom:12px}
+.pl-b{min-width:0}
+.pl-w-full{grid-column:span 6}.pl-w-twothirds{grid-column:span 4}.pl-w-half{grid-column:span 3}.pl-w-third{grid-column:span 2}
+.pl-a-start{text-align:right}.pl-a-center{text-align:center}.pl-a-end{text-align:left}
+.pl-a-center .doc-no{justify-content:center}.pl-a-end .doc-no{justify-content:flex-end}
+.pl-party{border:1px solid #c9ced8;border-radius:8px;padding:8px 12px;background:rgba(255,255,255,.85);font-size:13px;text-align:right}
+.pl-party small{display:block;color:#666;font-size:11px}
+.pl-party b{font-size:15px}
+.pl-line{border-bottom:1px solid #9aa3b2}
+.pl-line.thick{border-bottom:3px solid #14213d;margin-top:-2px}
+.pl-logo{max-width:100%;object-fit:contain;vertical-align:top}
+.pl-text{white-space:pre-line;font-size:14px}
+.pl-text.pl-size-small{font-size:12px}.pl-text.pl-size-large{font-size:18px}.pl-bold{font-weight:bold}
+.pl-field{display:flex;align-items:flex-end;gap:8px;font-size:13px;text-align:right}
+.pl-field i{flex:1;border-bottom:1px dotted #333;height:22px}
+.pl-b .doc-totals,.pl-one .doc-totals{width:100%;max-width:330px}
+.pl-a-end>.doc-totals{margin-inline-start:auto}.pl-a-center>.doc-totals{margin-inline:auto}
+.pl-b .doc-sign,.pl-one .doc-sign{margin-top:16px}
+.pl-b .doc-foot,.pl-one .doc-foot{margin-top:2px}
+.pl-b .doc-notes,.pl-one .doc-notes{text-align:right}
+
 /* ---------- الطباعة نفسها */
 #printArea{display:none}
 @media print{

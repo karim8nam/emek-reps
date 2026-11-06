@@ -83,6 +83,20 @@ tfoot td{font-weight:bold;background:var(--soft)}
 
 /* ---------- حالات */
 .badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:30px;font-size:12px;white-space:nowrap;background:var(--muted-bg);color:var(--muted)}
+/* «💡 رواكد قريبة» في أمر التصنيع */
+.near-box{border:1px solid var(--line);border-radius:12px;background:var(--soft);padding:10px 12px;margin-bottom:10px}
+.near-head{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px}
+.near-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:7px 0;border-top:1px solid var(--line)}
+.near-name{flex:1 1 180px;min-width:0;overflow-wrap:anywhere}
+.near-kg{font-size:13px;color:var(--muted);white-space:nowrap}
+.near-dot{flex:none;width:18px;height:18px;border-radius:50%;border:1px solid var(--line)}
+.near-dot.none{background:transparent;border-style:dashed;border-color:var(--muted)}
+.near-sub{font-size:12px;padding:7px 0 3px}
+.near-others{margin-top:6px;border-top:1px solid var(--line);padding-top:7px}
+.near-others summary{cursor:pointer;font-size:13px;padding-bottom:5px}
+.near-1{background:var(--good-bg);color:var(--good)}
+.near-2{background:var(--info-bg);color:var(--info)}
+.near-3{background:var(--warn-bg);color:var(--warn-ink)}
 .st-pending{background:var(--warn-bg);color:var(--warn-ink)}
 .st-approved{background:var(--info-bg);color:var(--info)}
 .st-paid{background:var(--good-bg);color:var(--good)}

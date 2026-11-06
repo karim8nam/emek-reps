@@ -200,6 +200,7 @@ function batchForm(p, prefill = {}) {
       <div id="boCodeHint"></div>
       <label class="check"><input type="checkbox" id="boNoFormula"> من غير تركيبة (رواكد + بنود بالإيد بس)</label>
       <h3>♻️ رواكد داخلة في الباتش <span class="muted" style="font-size:13px;font-weight:normal">— اختياري، أي لون، بالكيلو</span></h3>
+      <div id="boLeftNear"></div>
       <div class="table-wrap"><table class="lines-edit"><thead><tr><th>الرواكد</th><th class="col-qty">الكمية (كجم)</th><th class="col-x"></th></tr></thead><tbody id="boLefts"></tbody></table></div>
       <button type="button" class="secondary small" id="boLeftAdd" style="margin-top:8px"${lefts.length ? '' : ' disabled title="مفيش رواكد في مخزن المصنع"'}>+ رواكد</button>
       <h3>بنود زيادة <span class="muted" style="font-size:13px;font-weight:normal">— خامة بالإيد فوق التركيبة (أو كل البنود لو من غير تركيبة)</span></h3>
@@ -299,6 +300,7 @@ function batchForm(p, prefill = {}) {
     return { pkg, fromPk, L, E, nf, f, total, bad };
   };
   const paint = () => {
+    near.refresh();
     const c = current();
     $('#boQtyAuto', b).classList.toggle('hidden', !c.fromPk || c.nf);
     $('#boQtyManual', b).classList.toggle('hidden', c.fromPk || c.nf);
@@ -322,6 +324,17 @@ function batchForm(p, prefill = {}) {
     $(s, b).addEventListener('click', e => { if (e.target.closest('[data-del]')) { e.target.closest('tr').remove(); paint(); } });
   });
   $('#boNoFormula', b).addEventListener('change', paint);
+  // «💡 رواكد قريبة»: الدوسة بتضيف سطر بالمتاح (أو الباقي من العبوات لو أقل)، والكمية تتعدّل عادي
+  const near = mountLeftoverNear($('#boLeftNear', b), {
+    code: () => $('#boCode', b).value, product: p, lefts, nameOf: leftName,
+    isAdded: id => [...$$('#boLefts [data-f=left]', b)].some(s => +s.value === Number(id)),
+    add: l => {
+      const pkg = pk.read(), free = parseScaled(l.free.toFixed(3), 3), need = pkg.rows.length && !pkg.bad ? pkg.total - readLefts().total - readExtras().total : 0n;
+      leftRow({ leftover_id: l.id, kg: qtyText(scaledToString(need > 0n && need < free ? need : free, 3)).replace(/,/g, '') });
+      paint();
+    },
+  });
+  $('#boCode', b).addEventListener('input', debounce(near.refresh, 250));
   pk = packagesEditor($('#boPk', b), prefill.packages, paint, prodPk, p.id);
   if (prefill.quantity_kg && !(prefill.packages && prefill.packages.length)) { $('#boUnit', b).value = 'kg'; $('#boQty', b).value = String(Number(prefill.quantity_kg)); }
   $('#boQty', b).addEventListener('input', paint);

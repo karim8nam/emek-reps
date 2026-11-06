@@ -63,6 +63,20 @@
 .bg-preview{position:relative;width:100%;aspect-ratio:210/297;overflow:hidden;border:1px solid var(--line);border-radius:10px;background:#fff}
 .bg-preview>.bg-zoom{position:absolute;top:0;right:0;width:794px;transform-origin:top right;pointer-events:none}
 .bg-tag{font-size:12px}
+/* (sql/047) «🖨️ شكل الورق ← 📐 ترتيب الورقة»: الأجزاء على جنب والمعاينة على الجنب التاني */
+.pl-editor{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
+.pl-list{display:grid;gap:8px}
+.pl-item{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:8px 10px;min-width:0}
+.pl-item.open{border-color:var(--hover-line);background:var(--soft)}
+.pl-item-head{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.pl-item-name{flex:1 1 160px;min-width:0;font-weight:600;overflow-wrap:anywhere}
+.pl-item-head select{width:auto;min-width:0}
+.pl-set{margin-top:10px;display:grid;gap:8px}
+.pl-cols{display:grid;gap:6px}
+.pl-col{display:flex;gap:6px;align-items:center;min-width:0}
+.pl-col input:not([type=checkbox]){flex:1;min-width:0}
+.pl-col input[type=checkbox]{width:auto}
+.pl-prev{position:sticky;top:12px;min-width:0}
 
 /* حالة الطلب + رسالة الواتساب */
 .status-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:30px;font-size:12px;white-space:nowrap;background:var(--info-bg);color:var(--info)}

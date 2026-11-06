@@ -3,6 +3,8 @@
   .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .grid-3{grid-template-columns:repeat(2,minmax(0,1fr))}
   .bg-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pl-editor{grid-template-columns:minmax(0,1fr)}
+  .pl-prev{position:static}
 }
 @media(max-width:860px){
   /* معاينة الفاتورة/العرض وبيان التصنيع على شاشة ضيقة: الورقة بمقاسها الحقيقي وبتتسحب بالعرض جوه إطارها (نفس شكل الطباعة بالظبط) */
