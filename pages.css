@@ -130,3 +130,15 @@ body.dark{--series-1:#3987e5;--series-2:#d95926}
 .trend-table summary{cursor:pointer;color:var(--muted);font-size:13px;padding:4px 0}
 /* 🔎 دوّر في كل حاجة: عنوان كل نوع */
 .gs-table .gs-group th{text-align:right;font-size:13px}
+/* (sql/056) 📒 يومية الخزنة */
+.journal-no{align-self:center;padding-bottom:6px}
+.journal-table{min-width:820px}                       /* (الموبايل: الجدول بيتحرك بالعرض جوه الإطار بدل ما الكلام يتكسّر) */
+.journal-table .col-no{width:36px;text-align:center;color:var(--muted)}
+.journal-table td.num,.journal-table th.num{width:130px}
+.journal-table .journal-entry td{background:var(--soft);vertical-align:middle}
+.journal-table .journal-entry input{width:100%;min-width:0;box-sizing:border-box;padding:7px 8px}
+.journal-table .journal-entry.editing td{background:var(--warn-bg,#fff7e0)}
+.journal-table .journal-entry-info td{background:var(--soft);border-top:0;padding-top:0}
+.journal-table tr.journal-late td{opacity:.85}
+.journal-table tfoot td{font-weight:bold}
+.journal-history summary{cursor:pointer;color:var(--muted);padding:4px 0}

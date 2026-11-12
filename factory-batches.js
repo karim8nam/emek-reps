@@ -92,6 +92,10 @@ const innerName = x => x ? x.name : '';
 const containerChoices = (containers, productId, type, weight) => containers.filter(c => c.active && normPk(c.package_type) === normPk(type)
   && (c.unit_weight_kg == null || Number(c.unit_weight_kg) === Number(weight)) && (!c.product_id || Number(c.product_id) === Number(productId)))
   .sort((a, b) => (a.product_id ? 0 : 1) - (b.product_id ? 0 : 1) || Number(a.id) - Number(b.id));
+// (0.47.0 — sql/055) الخاصة بمنتجات تانية: بالإيد بس (منتج ملوش عبوة بيتعبّى في عبوة منتج تاني)
+const containerOthers = (containers, productId, type, weight) => containers.filter(c => c.active && normPk(c.package_type) === normPk(type)
+  && (c.unit_weight_kg == null || Number(c.unit_weight_kg) === Number(weight)) && c.product_id && Number(c.product_id) !== Number(productId))
+  .sort((a, b) => String(a.name).localeCompare(String(b.name), 'ar'));
 function containerDefault(containers, prodPk, productId, type, weight) {
   const t = normPk(type), w = Number(weight), pid = Number(productId);
   const act = containers.filter(c => c.active && normPk(c.package_type) === t);
@@ -109,16 +113,19 @@ function packagesEditor(box, initial, onChange, prodPk, productId) {
   const conts = stContainers(), inners = stInners();
   box.innerHTML = `<datalist id="pkTypes">${PACKAGE_TYPES.map(t => `<option value="${t}"></option>`).join('')}</datalist>
     <datalist id="pkWeights">${PACKAGE_WEIGHTS.map(w => `<option value="${w}"></option>`).join('')}</datalist>
+    <div data-pk-fill></div>
     <div class="table-wrap"><table class="lines-edit"><thead><tr><th>العبوة</th><th class="col-qty">الوزن (كجم)</th><th class="col-qty">العدد</th><th class="col-cont">الشكارة اللي هتتسحب</th>${inners.length ? '<th>الكيس الداخلي (وعدده لكل عبوة)</th>' : ''}<th class="col-total num">الإجمالي</th><th class="col-x"></th></tr></thead><tbody data-pk></tbody></table></div>
     <button type="button" class="secondary small" data-pk-add style="margin-top:8px">+ عبوة</button>`;
   const tbody = $('[data-pk]', box);
   const fillCont = tr => {
     const s = $('[data-f=cont]', tr), type = $('[data-f=type]', tr).value, w = normDigits($('[data-f=weight]', tr).value);
-    const list = type.trim() && Number(w) > 0 ? containerChoices(conts, productId, type, w) : [];
-    let sel = tr.dataset.cman === '1' && list.some(c => Number(c.id) === Number(s.value || tr.dataset.cid)) ? Number(s.value || tr.dataset.cid) : null;
-    if (!sel) { tr.dataset.cman = ''; sel = type.trim() && Number(w) > 0 ? containerDefault(conts, prodPk, productId, type, w) : null; }
-    s.innerHTML = `<option value="">${!type.trim() || !(Number(w) > 0) ? '—' : list.length ? '— اختار الشكارة —' : 'مفيش شكارة متسجلة للعبوة دي'}</option>`
-      + list.map(c => `<option value="${c.id}"${Number(c.id) === sel ? ' selected' : ''}>${esc(c.name)} — في المصنع ${esc(qtyText(c.qty))}</option>`).join('');
+    const ok = type.trim() && Number(w) > 0;
+    const list = ok ? containerChoices(conts, productId, type, w) : [], others = ok ? containerOthers(conts, productId, type, w) : [];
+    let sel = tr.dataset.cman === '1' && [...list, ...others].some(c => Number(c.id) === Number(s.value || tr.dataset.cid)) ? Number(s.value || tr.dataset.cid) : null;
+    if (!sel) { tr.dataset.cman = ''; sel = ok ? containerDefault(conts, prodPk, productId, type, w) : null; }
+    const opt = c => `<option value="${c.id}"${Number(c.id) === sel ? ' selected' : ''}>${esc(c.name)} — في المصنع ${esc(qtyText(c.qty))}</option>`;
+    s.innerHTML = `<option value="">${!ok ? '—' : list.length || others.length ? '— اختار الشكارة —' : 'مفيش شكارة متسجلة للعبوة دي'}</option>`
+      + list.map(opt).join('') + (others.length ? `<optgroup label="عبوات منتجات أخرى">${others.map(opt).join('')}</optgroup>` : '');
   };
   const innerSel = sel => `<select data-f="inner"><option value="">—</option>${inners.map(x => `<option value="${x.id}"${Number(sel) === Number(x.id) ? ' selected' : ''}>${esc(innerName(x))}</option>`).join('')}</select>`;
   const countSel = (n, inner) => `<select data-f="inner_n" style="width:70px" aria-label="عدد الأكياس لكل عبوة">${[0, 1, 2].map(k => `<option value="${k}"${k === (inner ? (n == null ? 1 : Number(n)) : 0) ? ' selected' : ''}>× ${k}</option>`).join('')}</select>`;
@@ -174,6 +181,7 @@ function packagesEditor(box, initial, onChange, prodPk, productId) {
   });
   $('[data-pk-add]', box).addEventListener('click', () => { $('[data-f=type]', add()).focus(); });
   (initial && initial.length ? initial : [{}]).forEach(v => add(v));
+  attachPackFill($('[data-pk-fill]', box), tbody, onChange);   // (0.47.0) الطن ← عدد العبوات (pack-fill.js)
   return { read };
 }
 const pkForEditor = list => (list || []).map(x => ({ type: x.type, weight: qtyText(x.weight).replace(/,/g, ''), count: String(x.count), inner_id: x.inner_id || null, inner_count: x.inner_count, container_id: x.container_id || null }));
@@ -434,6 +442,7 @@ function showBatch(id) {
         ${open && !b.opening ? '<button type="button" class="secondary" data-act="revise">✏️ تعديل (الصالة عدّلت)</button>' : ''}
         ${open && !b.approval_status ? '<button type="button" class="secondary" data-act="to-finance">📤 ابعته للمالية توافق</button>' : ''}
         ${b.status === 'done' && !b.opening && b.made_leftover_kg == null ? '<button type="button" class="secondary" data-act="leftover">♻️ سجّل رواكد</button>' : ''}
+        ${b.status === 'done' && !b.opening && (b.pack_lines || []).length ? '<button type="button" class="secondary" data-act="packs">📦 تسوية عدد العبوات</button>' : ''}
         ${open ? `${waiting ? '' : '<button type="button" class="good" data-act="done">✅ تم التنفيذ</button>'}<button type="button" class="danger" data-act="cancel">إلغاء الباتش</button>` : ''}</div>
       ${pendingHere.length ? `<div class="notice warn">⏳ فيه عملية على الباتش ده اتبعتت ولسه الإدارة مسجّلتهاش: ${pendingHere.map(opLabel).join('، ')}</div>` : ''}
       ${waiting ? '<div class="notice warn">⏳ الباتش ده مستني موافقة مسؤول المالية — «تم التنفيذ» بيظهر بعد الموافقة.</div>' : ''}
@@ -442,6 +451,7 @@ function showBatch(id) {
         ${b.started_at ? `<li>🏭 اتبعت للإدارة «جاري التنفيذ» — ${esc(fmtDateTime(b.started_at))}</li>` : ''}
         ${b.done_at ? `<li>✅ اتعلّم «تم التنفيذ» — ${esc(fmtDateTime(b.done_at))}</li>` : ''}
         ${b.made_leftover_kg != null ? `<li>♻️ طلع منه رواكد <b>${esc(qtyText(b.made_leftover_kg))} كجم</b></li>` : ''}
+        ${(b.pack_adjust || []).map(a => `<li>📦 <b>${esc(a.by || '')}</b> سجّل ${a.delta < 0 ? 'عجز' : 'زيادة'} <b>${esc(qtyText(Math.abs(a.delta)))} ${esc(a.type)} ${esc(qtyText(a.weight))} كجم</b>${a.delta < 0 ? (a.back ? ' (العبوات الفاضية رجعت المخزن)' : ' (العبوات الفاضية على تكلفة الباتش)') : ''} — ${esc(fmtDateTime(a.at))}<br><span class="muted">${esc(a.note || '')}</span></li>`).join('')}
         ${b.cancelled_at ? `<li>🚫 اتلغى — ${esc(fmtDateTime(b.cancelled_at))}<br><span class="muted">${esc(b.cancel_reason || '')}</span></li>` : ''}</ul>
       <div class="sheet-preview">${batchSheetHtml(b)}</div>`,
   });
@@ -452,11 +462,14 @@ function showBatch(id) {
     if (act === 'continue') { m.close(); return batchForm(productOf(b.product_id), { code: b.code, customer: b.customer, pebble: b.pebble || null, packages: pkForEditor(b.packages), continues: b }); }
     if (act === 'revise') { m.close(); return reviseBatchForm(b); }
     let payload = null, done = '';
-    if (act === 'done' || act === 'leftover') {
-      const r = await leftoverBox(b, act === 'done'); if (!r) return;
-      payload = act === 'done' ? { op: 'batch_done', batch_id: String(b.id), leftover_kg: r.kg, leftover_note: r.note, label: `✅ تم التنفيذ — باتش ${b.number}${r.kg ? ` (رواكد ${qtyText(r.kg)} كجم)` : ''}` }
+    if (act === 'packs') {
+      const r = await packAdjustBox(b); if (!r) return;
+      payload = { op: 'batch_packs', batch_id: String(b.id), packs: r.packs, note: r.note, label: `📦 تسوية عدد العبوات — باتش ${b.number}` }; done = '📦 اتسجلت تسوية العبوات';
+    } else if (act === 'done' || act === 'leftover') {
+      const r = await leftoverBox(b, act === 'done', act === 'done' && !b.opening ? b.pack_lines : null); if (!r) return;
+      payload = act === 'done' ? donePayload(b, r)
         : { op: 'leftover_record', batch_id: String(b.id), kg: r.kg, note: r.note, label: `♻️ رواكد ${qtyText(r.kg)} كجم — باتش ${b.number}` };
-      done = act === 'done' ? (r.kg ? `✅ اتعلّم «تم التنفيذ» — واتسجل ${qtyText(r.kg)} كجم رواكد` : '✅ اتعلّم «تم التنفيذ»') : `♻️ اتسجل ${qtyText(r.kg)} كجم رواكد`;
+      done = act === 'done' ? doneText(r) : `♻️ اتسجل ${qtyText(r.kg)} كجم رواكد`;
     } else if (act === 'cancel') {
       const why = await promptBox('إلغاء الباتش ' + b.number, 'سبب الإلغاء', { ok: 'إلغاء الباتش', cls: 'danger', hint: 'رقم الباتش هيفضل متسجل كـ«ملغي» ومش هيتكرر.' });
       if (why == null) return;
@@ -470,12 +483,43 @@ function showBatch(id) {
   });
 }
 // «✅ تم التنفيذ» (أو «♻️ سجّل رواكد» بعدها): «فيه زيادة؟ كام كيلو» ← { kg, note } أو null لو رجع
-function leftoverBox(b, isDone) {
+// (sql/055) «تم التنفيذ» بالرواكد والعدد الفعلي للعبوات
+const donePayload = (b, r) => ({ op: 'batch_done', batch_id: String(b.id), leftover_kg: r.kg, leftover_note: r.note,
+  ...(r.packs && r.packs.length ? { packs: r.packs, packs_note: r.packsNote } : {}),
+  label: `✅ تم التنفيذ — باتش ${b.number}${r.kg ? ` (رواكد ${qtyText(r.kg)} كجم)` : ''}${r.packs && r.packs.length ? ' (وتسوية العبوات)' : ''}` });
+const doneText = r => (r.kg ? `✅ اتعلّم «تم التنفيذ» — واتسجل ${qtyText(r.kg)} كجم رواكد` : '✅ اتعلّم «تم التنفيذ»') + (r.packs && r.packs.length ? ' — وتسوية العبوات' : '');
+// «📦 تسوية عدد العبوات» بعد التنفيذ ← { packs, note } أو null
+function packAdjustBox(b) {
   return new Promise(resolve => {
     let res = null;
     const m = openModal({
-      title: (isDone ? 'تم تنفيذ الباتش ' : '♻️ رواكد الباتش ') + b.number, small: `${b.product_name}${b.code ? ' — ' + b.code : ''} — ${kgText(b.quantity_kg)}`, onClose: () => resolve(res),
-      body: `<div class="form">
+      title: '📦 تسوية عدد العبوات — باتش ' + b.number, small: `${b.product_name}${b.code ? ' — ' + b.code : ''} — ${kgText(b.quantity_kg)}`, wide: true, onClose: () => resolve(res),
+      body: `${packActualHtml(b.pack_lines || [])}
+        <div class="form"><label>سبب الفرق<input id="paNote" maxlength="200" placeholder="زي: شكاير قطعت / عدّ المخزن / الخلطة طلعت أكتر"></label></div>
+        <div class="notice">العجز: تكلفة الكيلو بتزيد (الخامات اتصرفت). علّم «رجعت مخزن المصنع» لو العبوات الفاضية سليمة ورجعت. الزيادة: عبوات جاهزة للبيع، وعبواتها بتتسحب من مخزن المصنع.</div>
+        <div class="form-error hidden" id="paErr"></div>
+        <div class="modal-actions"><button type="button" class="primary" id="paOk">📦 سجّل التسوية</button><button type="button" class="secondary" id="paBack">رجوع</button></div>`,
+    });
+    m.el.addEventListener('input', () => packActualRead(m.el)); m.el.addEventListener('change', () => packActualRead(m.el));
+    $('#paBack', m.el).addEventListener('click', () => m.close());
+    $('#paOk', m.el).addEventListener('click', () => {
+      const err = $('#paErr', m.el), r = packActualRead(m.el), note = $('#paNote', m.el).value.trim();
+      if (r.bad) return showError(err, r.bad);
+      if (!r.rows.length) return showError(err, 'مفيش فرق عن العدد المسجّل');
+      if (note.length < 2) return showError(err, 'اكتب سبب الفرق');
+      res = { packs: r.rows, note }; m.close();
+    });
+  });
+}
+function leftoverBox(b, isDone, pkgs = null) {
+  return new Promise(resolve => {
+    let res = null;
+    const lines = (pkgs || []).map(p => ({ line_no: p.line_no, package_type: p.package_type, unit_weight_kg: p.unit_weight_kg, count: p.count }));
+    const m = openModal({
+      title: (isDone ? 'تم تنفيذ الباتش ' : '♻️ رواكد الباتش ') + b.number, small: `${b.product_name}${b.code ? ' — ' + b.code : ''} — ${kgText(b.quantity_kg)}`, onClose: () => resolve(res), wide: lines.length > 0,
+      body: `${lines.length ? `<h3 style="margin-top:0">📦 العبوات اللي طلعت فعلًا</h3>${packActualHtml(lines)}
+          <div class="form"><label>سبب الفرق (لو فيه عجز أو زيادة)<input id="lbPkNote" maxlength="200" placeholder="زي: شكاير قطعت / الخلطة طلعت أكتر"></label></div>
+          <h3>♻️ الرواكد</h3>` : ''}<div class="form">
           <label>${isDone ? 'فيه زيادة (رواكد)؟ كام كيلو — فاضي لو مفيش' : 'كمية الزيادة (رواكد) بالكيلو'}<input id="lbKg" inputmode="decimal" dir="ltr" placeholder="${isDone ? 'مفيش' : ''}"></label>
           <label>ملاحظة (اختياري)<input id="lbNote" maxlength="200" placeholder="زي: فضلة الخلاط"></label></div>
         <div class="notice">الرواكد بتدخل مخزن المصنع بلون الباتش ده، وتقدر تستخدمها في أي باتش جديد. ${isDone ? 'الخامات والعبوات بتتسحب من مخزن المصنع لما الإدارة تسجّل «تم التنفيذ».' : 'بتتسجل مرة واحدة للباتش.'}</div>
@@ -488,10 +532,13 @@ function leftoverBox(b, isDone) {
       const problem = raw && (g == null || g <= 0n) ? 'الكمية لازم تكون رقم أكبر من صفر (لحد 3 أرقام بعد العلامة)'
         : !raw && !isDone ? 'اكتب كمية الزيادة بالكيلو'
         : g != null && g > (parseScaled(String(b.quantity_kg), 3) || 0n) ? 'الزيادة أكبر من الباتش نفسه — راجع الكمية' : null;
-      if (problem) return showError(err, problem);
-      res = { kg: g != null ? scaledToString(g, 3) : null, note: $('#lbNote', m.el).value.trim() || null };
+      const pk = lines.length ? packActualRead(m.el) : { rows: [], bad: null }, pkNote = lines.length ? $('#lbPkNote', m.el).value.trim() : '';
+      const problem2 = problem || pk.bad || (pk.rows.length && pkNote.length < 2 ? 'اكتب سبب الفرق في عدد العبوات' : null);
+      if (problem2) return showError(err, problem2);
+      res = { kg: g != null ? scaledToString(g, 3) : null, note: $('#lbNote', m.el).value.trim() || null, packs: pk.rows, packsNote: pkNote || null };
       m.close();
     });
+    if (lines.length) { m.el.addEventListener('input', () => packActualRead(m.el)); m.el.addEventListener('change', () => packActualRead(m.el)); }
   });
 }
 
@@ -588,9 +635,8 @@ Tabs.run = (el) => {
     const pr = e.target.closest('[data-print]'); if (pr) { e.stopPropagation(); const b = batchOf(pr.dataset.print); return b && printHtml(batchSheetHtml(b)); }
     const dn = e.target.closest('[data-done]');
     if (dn) {
-      const b = batchOf(dn.dataset.done), r = await leftoverBox(b, true); if (!r) return;
-      return busy(dn, async () => afterSubmit(await submitOp({ op: 'batch_done', batch_id: String(b.id), leftover_kg: r.kg, leftover_note: r.note, label: `✅ تم التنفيذ — باتش ${b.number}${r.kg ? ` (رواكد ${qtyText(r.kg)} كجم)` : ''}` }),
-        r.kg ? `✅ اتعلّم «تم التنفيذ» — واتسجل ${qtyText(r.kg)} كجم رواكد` : '✅ اتعلّم «تم التنفيذ»'));
+      const b = batchOf(dn.dataset.done), r = await leftoverBox(b, true, !b.opening ? b.pack_lines : null); if (!r) return;
+      return busy(dn, async () => afterSubmit(await submitOp(donePayload(b, r)), doneText(r)));
     }
     const op = e.target.closest('[data-open]'); if (op) return showBatch(+op.dataset.open);
     const pl = e.target.closest('[data-plan]'); if (pl) return planForm(pl.dataset.plan);
