@@ -293,12 +293,12 @@
     if (live.status === 'cancelled') return ['اتلغى', 'bad'];
     if (live.status === 'rejected') return ['المصنع رفضه', 'bad'];
     if (live.track && live.status === 'approved') return [live.track, ''];
-    if (live.type === 'invoice') return live.status === 'approved' ? ['فاتورة معتمدة — بتتجهز', ''] : ['فاتورة مستنية الموافقة', 'warn'];
-    if (live.confirmed_at) return live.status === 'approved' ? ['طلب — بيتجهز', ''] : ['طلب مستني الموافقة', 'warn'];
+    if (live.type === 'invoice') return live.status === 'approved' ? ['فاتورة معتمدة — بتتجهز', ''] : ['فاتورة قيد الموافقة', 'warn'];
+    if (live.confirmed_at) return live.status === 'approved' ? ['طلب — بيتجهز', ''] : ['طلب قيد الموافقة', 'warn'];
     const cs = live.status === 'approved' ? confirmState(live.id) : null;
     if (cs && cs.waiting) return ['✅ العميل أكّد — بيتبعت', 'gray'];
     if (cs && cs.error) return ['«العميل أكّد» مقبلش', 'bad'];                // (السبب تحت في الكارت)
-    return live.status === 'approved' ? ['اتوافق — مستني العميل', ''] : ['عرض سعر مستني الموافقة', 'warn'];
+    return live.status === 'approved' ? ['اتوافق — مستني العميل', ''] : ['عرض سعر قيد الموافقة', 'warn'];
   }
   // «✅ العميل أكّد» اللي لسه في الطريق (على الموبايل أو في الصندوق) أو اللي المصنع مقبلوش
   function confirmState(docId) {
@@ -357,7 +357,7 @@
       if (o.doc_id) { const d = s.docs.find(x => Number(x.id) === Number(o.doc_id)); if (d) { g = groups.get(Number(d.root)); used.add(Number(d.root)); } }
       const isQ = o.kind === 'quote';
       const stage = o.status === 'rejected' ? (isQ ? ['المدير رفضه', 'bad'] : ['اترفض: ' + (o.reason || ''), 'bad'])
-        : o.status === 'pending' ? (isQ ? ['مستني موافقة المدير', 'warn'] : o.lines.some(l => l.batch) ? ['وصل المصنع — بيتصنع', 'warn'] : ['وصل المصنع — بيتراجع', 'warn'])
+        : o.status === 'pending' ? (isQ ? ['قيد موافقة المدير', 'warn'] : o.lines.some(l => l.batch) ? ['وصل المصنع — بيتصنع', 'warn'] : ['وصل المصنع — بيتراجع', 'warn'])
         : g ? stageOf(g) : ['اتسجل', ''];
       const liveDoc = g ? (g.filter(d => d.type === 'invoice').pop() || g[g.length - 1]) : null;
       const q = g ? g.find(d => d.type === 'quote') : null, cs = q ? confirmState(q.id) : null;

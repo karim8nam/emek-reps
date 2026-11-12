@@ -445,7 +445,7 @@ function showBatch(id) {
         ${b.status === 'done' && !b.opening && (b.pack_lines || []).length ? '<button type="button" class="secondary" data-act="packs">📦 تسوية عدد العبوات</button>' : ''}
         ${open ? `${waiting ? '' : '<button type="button" class="good" data-act="done">✅ تم التنفيذ</button>'}<button type="button" class="danger" data-act="cancel">إلغاء الباتش</button>` : ''}</div>
       ${pendingHere.length ? `<div class="notice warn">⏳ فيه عملية على الباتش ده اتبعتت ولسه الإدارة مسجّلتهاش: ${pendingHere.map(opLabel).join('، ')}</div>` : ''}
-      ${waiting ? '<div class="notice warn">⏳ الباتش ده مستني موافقة مسؤول المالية — «تم التنفيذ» بيظهر بعد الموافقة.</div>' : ''}
+      ${waiting ? '<div class="notice warn">⏳ الباتش ده قيد موافقة مسؤول المالية — «تم التنفيذ» بيظهر بعد الموافقة.</div>' : ''}
       <ul class="timeline" style="margin-bottom:12px"><li>🏭 <b>${esc(b.created_by || '')}</b> أصدره — ${esc(fmtDateTime(b.created_at))}${b.order_number ? ` — للطلب ${esc(b.order_number)}` : ''}</li>
         ${b.revision ? `<li>✏️ <b>${esc(b.revision.by)}</b> عدّله (تعديل رقم ${esc(b.revision.rev_no)}) — ${esc(fmtDateTime(b.revision.at))}<br><span class="muted">${esc(b.revision.reason)}</span></li>` : ''}
         ${b.started_at ? `<li>🏭 اتبعت للإدارة «جاري التنفيذ» — ${esc(fmtDateTime(b.started_at))}</li>` : ''}

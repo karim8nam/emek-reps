@@ -137,6 +137,7 @@ body.dark{--series-1:#3987e5;--series-2:#d95926}
 .journal-table td.num,.journal-table th.num{width:130px}
 .journal-table .journal-entry td{background:var(--soft);vertical-align:middle}
 .journal-table .journal-entry input{width:100%;min-width:0;box-sizing:border-box;padding:7px 8px}
+.journal-table .journal-entry .je-acc{width:auto;max-width:150px;margin-inline-end:6px;padding:6px}
 .journal-table .journal-entry.editing td{background:var(--warn-bg,#fff7e0)}
 .journal-table .journal-entry-info td{background:var(--soft);border-top:0;padding-top:0}
 .journal-table tr.journal-late td{opacity:.85}
